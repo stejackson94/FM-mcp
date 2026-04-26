@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "football-manager-data": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "football-manager-data-mcp"
+      ],
+      "cwd": "/home/ste/Documents/personalDevops/FM-MCP"
+    }
+  }
+}
