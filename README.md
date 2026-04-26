@@ -116,8 +116,41 @@ make test     # run tests only
 make lint     # ruff lint with auto-fix
 make format   # ruff format
 make run      # start the server manually over stdio
+make run-ui   # start browser UI at http://127.0.0.1:8000
 make lock     # refresh uv.lock
 ```
+
+## Browser UI (No VS Code Required)
+
+You can run a simple web UI over the same `FootballCatalog` data and tools.
+
+1. Make sure your FM exports are in `input_data/`.
+2. Install dependencies:
+
+```bash
+make setup
+```
+
+3. Start the UI server:
+
+```bash
+make run-ui
+```
+
+4. Open your browser at:
+
+```text
+http://127.0.0.1:8000
+```
+
+The page includes:
+
+- `Search Players` (maps to `search_players`)
+- `Rank by Preferences` (maps to `rank_players_by_preferences`)
+- `List Available Columns`
+- `List Clubs`
+
+This UI uses the same parsing/ranking logic as the MCP server, so results stay consistent.
 
 ---
 

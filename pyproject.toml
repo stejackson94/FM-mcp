@@ -24,6 +24,8 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.9.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
 
 [project.optional-dependencies]
@@ -42,12 +44,16 @@ Documentation = "https://github.com/username/football-manager-data-mcp#readme"
 
 [project.scripts]
 football-manager-data-mcp = "football_manager_data_mcp.server:main"
+football-manager-data-ui = "football_manager_data_mcp.ui:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+football_manager_data_mcp = ["frontend/*.html", "frontend/*.css", "frontend/*.js"]
 
 [tool.uv]
 managed = true

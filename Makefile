@@ -43,6 +43,10 @@ run: ## Start the MCP server over stdio
 	@echo "Starting football-manager-data-mcp"
 	uv run football-manager-data-mcp
 
+run-ui: ## Start the browser UI server
+	@echo "Starting football-manager-data-ui on http://127.0.0.1:8000"
+	uv run football-manager-data-ui
+
 lock: ## Refresh the lockfile
 	@echo "Refreshing uv.lock"
 	uv lock

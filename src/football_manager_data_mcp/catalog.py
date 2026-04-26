@@ -293,13 +293,23 @@ class FootballCatalog:
 
             # Manual aliases for common football phrasing.
             if header == "Shot %":
-                alias_set.update({"shot percentage", "shot percent", "shot accuracy"})
+                alias_set.update(
+                    {
+                        "shot percentage",
+                        "shot percent",
+                        "shot accuracy",
+                        "shooting",
+                        "shooting accuracy",
+                    }
+                )
             if header == "Crs A/90":
                 alias_set.update(
                     {
                         "crosses attempted per 90",
                         "crosses per 90",
                         "crosses attempted",
+                        "crossing",
+                        "crosses",
                     }
                 )
             if header == "Pr passes/90":
@@ -311,9 +321,23 @@ class FootballCatalog:
                     }
                 )
             if header == "Tck/90":
-                alias_set.update({"tackles per 90", "tackles", "tackling per 90"})
+                alias_set.update(
+                    {
+                        "tackles per 90",
+                        "tackles",
+                        "tackling per 90",
+                        "tackling",
+                    }
+                )
             if header == "Tck R":
-                alias_set.update({"tackle completion", "tackle success", "tackle rate"})
+                alias_set.update(
+                    {
+                        "tackle completion",
+                        "tackle success",
+                        "tackle rate",
+                        "tackling",
+                    }
+                )
             if header == "Hdrs W/90":
                 alias_set.update(
                     {
@@ -322,6 +346,8 @@ class FootballCatalog:
                         "aerial won per 90",
                         "aerial duels won",
                         "aerial wins per 90",
+                        "headers",
+                        "heading",
                     }
                 )
             if header == "Int/90":
@@ -383,13 +409,19 @@ class FootballCatalog:
                     }
                 )
             if header == "Shot/90":
-                alias_set.update({"shots per 90", "shots"})
+                alias_set.update({"shots per 90", "shots", "shooting", "shooting accuracy"})
             if header == "Gls":
                 alias_set.update({"goals", "total goals"})
             if header == "Ast":
                 alias_set.update({"assists", "total assists"})
             if header == "Mins":
-                alias_set.update({"minutes", "minutes played"})
+                alias_set.update(
+                    {
+                        "minutes",
+                        "minutes played",
+                        "mins",
+                    }
+                )
 
             aliases[header] = alias_set
 

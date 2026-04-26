@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Football Manager Data UI</title>
+  <link rel="stylesheet" href="/frontend/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>FM Scout Desk</h1>
+      <p class="sub">A browser UI over your Football Manager MCP dataset. No VS Code required.</p>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Search Players</h2>
+        <div class="inputs">
+          <div>
+            <label for="searchQuery">Query</label>
+            <input id="searchQuery" placeholder="name, club, position, etc" />
+          </div>
+          <div>
+            <label for="searchPosition">Position (optional)</label>
+            <input id="searchPosition" placeholder="st | wb | am (c)" />
+          </div>
+          <div>
+            <label for="searchCountry">Country (optional)</label>
+            <input id="searchCountry" placeholder="England" />
+          </div>
+          <div>
+            <label for="searchLimit">Limit</label>
+            <input id="searchLimit" type="number" min="1" max="100" value="10" />
+          </div>
+          <button id="searchButton">Run Search</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Rank by Preferences</h2>
+        <div class="inputs">
+          <div>
+            <label for="rankPrompt">Prompt</label>
+            <textarea id="rankPrompt" placeholder="Example: find wing backs with high crosses per 90 and progressive passes"></textarea>
+          </div>
+          <div>
+            <label for="rankPosition">Position override (optional)</label>
+            <input id="rankPosition" placeholder="wb" />
+          </div>
+          <div>
+            <label for="rankCountry">Country (optional)</label>
+            <input id="rankCountry" placeholder="Spain" />
+          </div>
+          <div>
+            <label for="rankLimit">Limit</label>
+            <input id="rankLimit" type="number" min="1" max="100" value="10" />
+          </div>
+          <button id="rankButton">Rank Players</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Data Helpers</h2>
+        <div class="inputs">
+          <button id="columnsButton">List Available Columns</button>
+          <button id="clubsButton">List Clubs</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="results">
+      <p class="meta" id="meta">No query executed yet.</p>
+      <div id="tableWrap"></div>
+    </section>
+  </main>
+
+  <script src="/frontend/app.js"></script>
+</body>
+</html>
