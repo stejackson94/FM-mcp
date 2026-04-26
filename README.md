@@ -152,6 +152,20 @@ The page includes:
 
 This UI uses the same parsing/ranking logic as the MCP server, so results stay consistent.
 
+## Example Searches
+
+### 1) Centre-backs: heading, tackling, passing
+
+- Prompt: `centre backs with good heading, tackling and passing`
+
+![Centre-back example search](eample1.png)
+
+### 2) Wingers: crossing and progressive passing
+
+- Prompt: `wingers with high cross and progressive passes`
+
+![Winger example search](example2.png)
+
 ---
 
 ## Project Structure
