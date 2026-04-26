@@ -91,7 +91,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -126,6 +127,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.button-danger {
+  background: #a3363f;
+}
+
+.button-danger:hover {
+  background: #8f2f37;
+}
+
 .results {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -133,6 +142,28 @@ button:disabled {
   box-shadow: var(--shadow);
   padding: 1rem;
   overflow: auto;
+}
+
+.rank-cards {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.rank-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #fff;
+}
+
+.rank-card h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1.1rem;
+}
+
+.rank-card p {
+  margin: 0.25rem 0;
+  line-height: 1.35;
 }
 
 table {

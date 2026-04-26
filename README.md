@@ -145,22 +145,50 @@ http://127.0.0.1:8000
 
 The page includes:
 
-- `Search Players` (maps to `search_players`)
-- `Rank by Preferences` (maps to `rank_players_by_preferences`)
+- `Ranked by Metrics` (maps to `rank_players_by_preferences`)
+- Output view toggle (`Cards` or `Table`)
 - `List Available Columns`
 - `List Clubs`
+- `Upload Data` (upload your own FM HTML export with the expected columns)
+- `Clear Data` (removes uploaded UI files so storage does not keep growing)
+
+Ranked results now include tailored `why_fit`, `caveat`, and `tactical_use` notes per player.
+By default, the UI backend attempts an LLM rewrite for more natural wording and falls back to
+rule-based explanations if no LLM is available.
 
 This UI uses the same parsing/ranking logic as the MCP server, so results stay consistent.
 
+### Uploading Your Own HTML In The Browser UI
+
+1. Click `Choose file` in `Data Helpers` and select your FM `.html` export.
+2. Click `Upload Data`.
+3. The UI switches to the uploaded dataset for all queries.
+4. Click `Clear Data` to remove uploaded files and switch back to default `input_data/` files.
+
+### LLM Explanations (Default: On)
+
+The UI rank endpoint uses a hybrid approach:
+
+1. Deterministic fact extraction (metrics, percentiles, trade-off)
+2. LLM rewrite of those facts into natural-language scouting notes
+3. Automatic fallback to deterministic text if LLM is unavailable
+
+Environment variables:
+
+- `FM_ENABLE_LLM_EXPLANATIONS=true` (default)
+- `OPENAI_API_KEY=<your_key>`
+- `FM_LLM_MODEL=gpt-4o-mini` (default)
+- `OPENAI_BASE_URL=https://api.openai.com/v1` (default)
+
 ## Example Searches
 
-### 1) Centre-backs: heading, tackling, passing
+### 1) Wingers: shooting, passing and crossing table view
 
-- Prompt: `centre backs with good heading, tackling and passing`
+- Prompt: `wingers with high cross and progressive passes`
 
-![Centre-back example search](eample1.png)
+![winger card search](example1.png)
 
-### 2) Wingers: crossing and progressive passing
+### 2) Wingers: shooting, passing and crossing table view
 
 - Prompt: `wingers with high cross and progressive passes`
 
