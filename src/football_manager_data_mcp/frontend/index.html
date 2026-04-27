@@ -58,6 +58,17 @@
           <button id="clearDataButton" class="button-danger">Clear Data</button>
           <button id="columnsButton">List Available Columns</button>
           <button id="clubsButton">List Clubs</button>
+
+          <details class="helper-guide">
+            <summary>Help: what these buttons do</summary>
+            <ul>
+              <li><strong>Upload Data</strong>: uploads one FM HTML export and switches all queries to this uploaded dataset.</li>
+              <li><strong>Clear Data</strong>: removes uploaded files and switches back to the default <code>input_data</code> dataset.</li>
+              <li><strong>List Available Columns</strong>: shows all parsed columns and which ones are usable for ranking.</li>
+              <li><strong>List Clubs</strong>: returns clubs found in the currently active dataset.</li>
+            </ul>
+            <p class="helper-note">Uploaded files are temporary and are auto-cleared periodically.</p>
+          </details>
         </div>
       </article>
     </section>

@@ -181,6 +181,45 @@ button:disabled {
   filter: brightness(1.07);
 }
 
+.helper-guide {
+  margin-top: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(3, 6, 40, 0.55);
+  padding: 0.55rem 0.65rem;
+}
+
+.helper-guide summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.helper-guide[open] summary {
+  margin-bottom: 0.35rem;
+}
+
+.helper-guide ul {
+  margin: 0.2rem 0 0.35rem 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
+.helper-guide code {
+  background: rgba(205, 213, 234, 0.16);
+  padding: 0.05rem 0.25rem;
+  border-radius: 6px;
+}
+
+.helper-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .results {
   background: var(--panel);
   border: 1px solid var(--line);

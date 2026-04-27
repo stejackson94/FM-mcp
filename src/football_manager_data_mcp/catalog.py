@@ -306,6 +306,7 @@ class FootballCatalog:
                         "shot accuracy",
                         "shooting",
                         "shooting accuracy",
+                        "shot",
                     }
                 )
             if header == "Crs A/90":
@@ -316,6 +317,7 @@ class FootballCatalog:
                         "crosses attempted",
                         "crossing",
                         "crosses",
+                        "cross",
                     }
                 )
             if header == "Pr passes/90":
@@ -342,6 +344,7 @@ class FootballCatalog:
                         "tackle success",
                         "tackle rate",
                         "tackling",
+                        "tackles",
                     }
                 )
             if header == "Hdrs W/90":
@@ -374,6 +377,7 @@ class FootballCatalog:
                         "possession lost per 90",
                         "possession lost",
                         "possessions lost per 90",
+                        "possession",
                     }
                 )
             if header == "Pres C/90":
