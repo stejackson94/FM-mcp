@@ -6,9 +6,12 @@ WORKDIR /app
 
 COPY ./pyproject.toml ./uv.lock ./README.md ./
 
-RUN uv sync --frozen --no-dev
+# Install third-party deps first for better layer caching.
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY ./src ./src
+
+RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
 
