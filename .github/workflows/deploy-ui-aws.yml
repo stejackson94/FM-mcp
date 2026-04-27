@@ -121,8 +121,38 @@ jobs:
           APP_FM_LLM_BASE_URL: ${{ secrets.APP_FM_LLM_BASE_URL }}
           APP_FM_LLM_API_KEY: ${{ secrets.APP_FM_LLM_API_KEY }}
         run: |
+<<<<<<< HEAD
           ssh "$USER@$HOST" "sudo mkdir -p /opt/fm-mcp-ui /opt/fm-mcp-ui/uploads && sudo chown -R $USER:$USER /opt/fm-mcp-ui"
 
+=======
+          ssh "$USER@$HOST" 'set -euo pipefail
+            if ! command -v docker >/dev/null 2>&1; then
+              if command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y docker
+              elif command -v yum >/dev/null 2>&1; then
+                sudo yum install -y docker
+              elif command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update
+                sudo apt-get install -y docker.io
+              else
+                echo "No supported package manager found to install docker"
+                exit 1
+              fi
+            fi
+
+            if command -v systemctl >/dev/null 2>&1; then
+              sudo systemctl enable docker || true
+              sudo systemctl restart docker || sudo systemctl start docker
+            else
+              sudo service docker start || true
+            fi
+
+            sudo docker info >/dev/null
+          '
+
+          ssh "$USER@$HOST" "sudo mkdir -p /opt/fm-mcp-ui /opt/fm-mcp-ui/uploads && sudo chown -R $USER:$USER /opt/fm-mcp-ui"
+
+>>>>>>> ab44461 (feat: ci failures)
           ssh "$USER@$HOST" "sudo tee /opt/fm-mcp-ui/.env >/dev/null" <<EOF
           FM_UI_HOST=0.0.0.0
           FM_UI_PORT=8000
