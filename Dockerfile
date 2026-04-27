@@ -12,4 +12,4 @@ COPY ./src ./src
 
 EXPOSE 8000
 
-CMD ["uv", "run", "football-manager-data-mcp"]
+CMD ["uv", "run", "football-manager-data-ui"]

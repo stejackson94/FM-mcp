@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated, Any
@@ -17,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from football_manager_data_mcp.catalog import FootballCatalog
 
 app = FastAPI(title="Make FM Scouting Data Again", version="0.1.0")
+logger = logging.getLogger(__name__)
 frontend_dir = Path(__file__).resolve().parent / "frontend"
 input_data_dir = Path(__file__).resolve().parents[2] / "input_data"
 project_root_dir = Path(__file__).resolve().parents[2]
@@ -114,6 +117,18 @@ LLM_BASE_URL = os.getenv(
 )
 
 app.mount("/frontend", StaticFiles(directory=frontend_dir), name="frontend")
+
+AUTO_CLEAR_UPLOADS = os.getenv("FM_AUTO_CLEAR_UPLOADS", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+AUTO_CLEAR_UPLOADS_INTERVAL_SECONDS = int(
+    os.getenv("FM_AUTO_CLEAR_UPLOADS_INTERVAL_SECONDS", "3600")
+)
+_cleanup_stop_event = threading.Event()
+_cleanup_thread: threading.Thread | None = None
 
 
 def _llm_source_name() -> str:
@@ -348,13 +363,45 @@ def _parse_json_like_content(content: str) -> dict[str, Any]:
         if isinstance(parsed, str):
             parsed = json.loads(parsed)
         if not isinstance(parsed, dict):
-            raise json.JSONDecodeError("JSON content is not an object", text, start)
+            raise json.JSONDecodeError("JSON content is not an object", text, start) from None
         return parsed
+
+
+def _auto_cleanup_uploaded_data() -> None:
+    interval = max(AUTO_CLEAR_UPLOADS_INTERVAL_SECONDS, 60)
+    while not _cleanup_stop_event.wait(interval):
+        removed = _delete_files(_uploaded_html_files())
+        if removed > 0:
+            _reload_catalog()
+            logger.info("Auto-cleared %s uploaded file(s)", removed)
+
+
+@app.on_event("startup")
+def _startup_tasks() -> None:
+    global _cleanup_thread
+    if not AUTO_CLEAR_UPLOADS:
+        logger.info("Auto-clear uploads disabled")
+        return
+    _cleanup_stop_event.clear()
+    _cleanup_thread = threading.Thread(target=_auto_cleanup_uploaded_data, daemon=True)
+    _cleanup_thread.start()
+
+
+@app.on_event("shutdown")
+def _shutdown_tasks() -> None:
+    _cleanup_stop_event.set()
+    if _cleanup_thread and _cleanup_thread.is_alive():
+        _cleanup_thread.join(timeout=1)
 
 
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(frontend_dir / "index.html")
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.get("/api/data-status")
@@ -507,7 +554,12 @@ def api_player(player_id: str) -> dict[str, Any]:
 
 
 def main() -> None:
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    host = os.getenv("FM_UI_HOST", "0.0.0.0")
+    try:
+        port = int(os.getenv("FM_UI_PORT", "8000"))
+    except ValueError:
+        port = 8000
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,68 @@
+name: Terraform Destroy (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Type DESTROY to confirm"
+        required: true
+        default: ""
+      aws_region:
+        description: "AWS region"
+        required: true
+        default: "eu-west-2"
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.TF_VAR_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_VAR_SECRET_KEY }}
+
+jobs:
+  destroy:
+    if: ${{ github.event.inputs.confirm_destroy == 'DESTROY' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./terraform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Destroy
+        run: |
+          SSH_KEY_NAME="${{ secrets.TF_VAR_SSH_KEY_NAME }}"
+          if [[ -z "$SSH_KEY_NAME" ]]; then
+            echo "Missing TF_VAR_SSH_KEY_NAME secret."
+            exit 1
+          fi
+
+          SSH_ALLOWED_CIDR="${{ secrets.TF_VAR_SSH_ALLOWED_CIDR }}"
+          if [[ -z "$SSH_ALLOWED_CIDR" ]]; then
+            SSH_ALLOWED_CIDR="0.0.0.0/0"
+          fi
+
+          HTTP_ALLOWED_CIDR="${{ secrets.TF_VAR_HTTP_ALLOWED_CIDR }}"
+          if [[ -z "$HTTP_ALLOWED_CIDR" ]]; then
+            HTTP_ALLOWED_CIDR="0.0.0.0/0"
+          fi
+
+          terraform destroy -auto-approve -input=false \
+            -var="aws_region=${{ github.event.inputs.aws_region }}" \
+            -var="ssh_key_name=${SSH_KEY_NAME}" \
+            -var="http_allowed_cidr=${HTTP_ALLOWED_CIDR}" \
+            -var="ssh_allowed_cidr=${SSH_ALLOWED_CIDR}"
+
+  not-confirmed:
+    if: ${{ github.event.inputs.confirm_destroy != 'DESTROY' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirmation required
+        run: |
+          echo "Destroy aborted. Re-run workflow and set confirm_destroy to DESTROY."

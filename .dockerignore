@@ -1,0 +1,17 @@
+.git
+.gitignore
+.github
+.vscode
+.venv
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+input_data
+example_data
+fm_views
+.env
+.env.*

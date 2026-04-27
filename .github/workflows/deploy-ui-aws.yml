@@ -1,0 +1,126 @@
+name: Deploy UI to AWS EC2
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.TF_VAR_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_VAR_SECRET_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Validate app quality gates
+        run: make check
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ./terraform
+        run: terraform validate -no-color
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: |
+          HTTP_ALLOWED_CIDR="${{ secrets.TF_VAR_HTTP_ALLOWED_CIDR }}"
+          if [[ -z "$HTTP_ALLOWED_CIDR" ]]; then
+            HTTP_ALLOWED_CIDR="0.0.0.0/0"
+          fi
+
+          terraform apply -auto-approve -input=false \
+            -var="aws_region=${AWS_REGION}" \
+            -var="ssh_key_name=${{ secrets.TF_VAR_SSH_KEY_NAME }}" \
+            -var="http_allowed_cidr=${HTTP_ALLOWED_CIDR}" \
+            -var="ssh_allowed_cidr=${{ secrets.TF_VAR_SSH_ALLOWED_CIDR || '0.0.0.0/0' }}"
+
+      - name: Set deployment host
+        id: host
+        working-directory: ./terraform
+        run: |
+          TF_PUBLIC_DNS=$(terraform output -raw public_dns)
+          TF_PUBLIC_IP=$(terraform output -raw public_ip)
+          HOST="${TF_PUBLIC_DNS:-$TF_PUBLIC_IP}"
+          if [[ -n "${{ secrets.EC2_HOST }}" ]]; then
+            HOST="${{ secrets.EC2_HOST }}"
+          fi
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        env:
+          IMAGE_TAG: ghcr.io/${{ github.repository_owner }}/fm-mcp-ui:${{ github.sha }}
+        run: |
+          docker build -t "$IMAGE_TAG" .
+          docker push "$IMAGE_TAG"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+
+      - name: Prepare SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ steps.host.outputs.host }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy container via SSH
+        env:
+          HOST: ${{ steps.host.outputs.host }}
+          USER: ${{ secrets.EC2_USER }}
+          APP_FM_ENABLE_LLM_EXPLANATIONS: ${{ secrets.APP_FM_ENABLE_LLM_EXPLANATIONS }}
+          APP_FM_LLM_MODEL: ${{ secrets.APP_FM_LLM_MODEL }}
+          APP_FM_LLM_BASE_URL: ${{ secrets.APP_FM_LLM_BASE_URL }}
+          APP_FM_LLM_API_KEY: ${{ secrets.APP_FM_LLM_API_KEY }}
+        run: |
+          ssh "$USER@$HOST" "mkdir -p /opt/fm-mcp-ui"
+
+          ssh "$USER@$HOST" "cat > /opt/fm-mcp-ui/.env" <<EOF
+          FM_UI_HOST=0.0.0.0
+          FM_UI_PORT=8000
+          FM_AUTO_CLEAR_UPLOADS=true
+          FM_AUTO_CLEAR_UPLOADS_INTERVAL_SECONDS=3600
+          FM_ENABLE_LLM_EXPLANATIONS=${APP_FM_ENABLE_LLM_EXPLANATIONS:-true}
+          FM_LLM_MODEL=${APP_FM_LLM_MODEL}
+          FM_LLM_BASE_URL=${APP_FM_LLM_BASE_URL}
+          FM_LLM_API_KEY=${APP_FM_LLM_API_KEY}
+          EOF
+
+          ssh "$USER@$HOST" "if docker ps -a --format '{{.Names}}' | grep -q '^fm-mcp-ui$'; then docker rm -f fm-mcp-ui; fi"
+          ssh "$USER@$HOST" "docker pull $IMAGE_TAG"
+          ssh "$USER@$HOST" "docker run -d --name fm-mcp-ui --restart always -p 80:8000 --env-file /opt/fm-mcp-ui/.env -v /opt/fm-mcp-ui/uploads:/app/input_data/ui_uploads $IMAGE_TAG"
+
+      - name: Smoke test
+        env:
+          HOST: ${{ steps.host.outputs.host }}
+        run: |
+          curl --fail --max-time 10 "http://$HOST/health"
+          curl --fail --max-time 10 "http://$HOST/api/data-status"

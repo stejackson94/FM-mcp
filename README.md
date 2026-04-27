@@ -219,6 +219,61 @@ already have one.
 
 ---
 
+## AWS Deployment (EC2 + Terraform + GitHub Actions)
+
+This repository includes a module-based Terraform stack and an SSH deployment workflow:
+
+- Terraform root: `terraform/`
+- Local module wrapper: `terraform/modules/compute/`
+- Deploy workflow: `.github/workflows/deploy-ui-aws.yml`
+
+### Required GitHub Secrets
+
+Use the same AWS credential naming convention as your existing static-site repo:
+
+- `TF_VAR_ACCESS_KEY`
+- `TF_VAR_SECRET_KEY`
+- `TF_VAR_SSH_KEY_NAME` (existing EC2 key pair name)
+- `EC2_SSH_PRIVATE_KEY` (private key matching the key pair above)
+- `EC2_USER` (e.g. `ec2-user` for Amazon Linux)
+
+Runtime app secrets for LLM access:
+
+- `APP_FM_ENABLE_LLM_EXPLANATIONS`
+- `APP_FM_LLM_MODEL`
+- `APP_FM_LLM_BASE_URL` (for Groq: `https://api.groq.com/openai/v1`)
+- `APP_FM_LLM_API_KEY`
+
+Optional:
+
+- `EC2_HOST` to override Terraform output host selection
+- `TF_VAR_SSH_ALLOWED_CIDR` to constrain SSH source IP range
+
+### Runtime Behavior
+
+- Container binds on `0.0.0.0:8000` and is mapped to EC2 port `80`.
+- Health check endpoint is available at `/health`.
+- Uploaded UI files are ephemeral and auto-cleared hourly by default.
+
+### Manual Terraform Run
+
+```bash
+cd terraform
+terraform init
+terraform validate
+terraform plan -var='ssh_key_name=<your-key-name>'
+terraform apply -var='ssh_key_name=<your-key-name>'
+```
+
+### Access URL
+
+After apply/deploy, open:
+
+- `http://<EC2_PUBLIC_DNS>`
+- or `http://<EC2_PUBLIC_IP>`
+
+---
+
 ## Project Structure
 
 ```text
