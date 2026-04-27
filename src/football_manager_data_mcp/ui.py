@@ -154,6 +154,32 @@ def _percentile_for_value(values: list[float], value: float, prefer_low: bool) -
     return round(percentile)
 
 
+def _clean_player_text(value: Any, fallback: str = "") -> str:
+    text = str(value or "").strip()
+    if not text or text == "-" or text.lower() == "unknown":
+        return fallback
+    return text
+
+
+def _format_fact_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else f"{value:.2f}"
+    text = _clean_player_text(value)
+    return text or None
+
+
+def _describe_score_band(score: float) -> str:
+    if score >= 0.75:
+        return "elite"
+    if score >= 0.55:
+        return "strong"
+    if score >= 0.4:
+        return "balanced"
+    return "situational"
+
+
 def _build_explanation_facts(
     entry: dict[str, Any],
     rank_index: int,
@@ -164,6 +190,7 @@ def _build_explanation_facts(
 ) -> dict[str, Any]:
     player = entry.get("player", {})
     matched_metrics = entry.get("matched_metrics", {})
+    numeric_metrics = player.get("numeric_metrics", {})
 
     metric_values_by_name: dict[str, list[float]] = {}
     for pool_entry in ranked_pool:
@@ -187,21 +214,45 @@ def _build_explanation_facts(
         )
 
     scored_metrics.sort(key=lambda item: int(item["percentile"]), reverse=True)
-    strengths = scored_metrics[:2]
+    strengths = scored_metrics[:3]
     trade_off = scored_metrics[-1] if len(scored_metrics) > 2 else None
+    score = round(float(entry.get("score", 0.0)), 4)
+
+    player_context = []
+    for value in (
+        _clean_player_text(player.get("club_name")),
+        _clean_player_text(player.get("nationality")),
+        _clean_player_text(player.get("position")),
+    ):
+        if value and value not in player_context:
+            player_context.append(value)
+
+    minutes_value = _format_fact_value(numeric_metrics.get("Mins"))
+    transfer_value = _format_fact_value(player.get("transfer_value"))
+    wage = _format_fact_value(player.get("wage"))
+    rec = _format_fact_value(player.get("rec"))
+    potential = _format_fact_value(player.get("potential"))
 
     return {
         "player_name": player.get("name", "Unknown"),
         "club_name": player.get("club_name", "Unknown"),
+        "nationality": _clean_player_text(player.get("nationality"), "Unknown"),
         "position": player.get("position", ""),
         "search_brief": prompt.strip(),
         "evaluation_mode": "lower_better" if prefer_low else "higher_better",
         "rank": rank_index + 1,
         "total_ranked": total_ranked,
-        "score": round(float(entry.get("score", 0.0)), 4),
+        "score": score,
+        "score_band": _describe_score_band(score),
         "requested_metrics": entry.get("requested_metrics", []),
         "strengths": strengths,
         "trade_off": trade_off,
+        "minutes": minutes_value,
+        "transfer_value": transfer_value,
+        "wage": wage,
+        "recommendation": rec,
+        "potential": potential,
+        "player_context": player_context,
     }
 
 
@@ -217,6 +268,9 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
     brief = str(facts.get("search_brief", "")).strip() or "the requested scouting brief"
     player_name = str(facts.get("player_name", "This player"))
     position = str(facts.get("position", "")).strip() or "multiple roles"
+    club_name = str(facts.get("club_name", "Unknown"))
+    nationality = str(facts.get("nationality", "Unknown"))
+    score_band = str(facts.get("score_band", "balanced"))
 
     rank = int(facts.get("rank", 1))
     total = int(facts.get("total_ranked", 1))
@@ -228,12 +282,51 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
     else:
         lead = f"Useful profile (ranked #{rank} of {total})"
 
+    context_bits = [f"{nationality} at {club_name}", position]
+    minutes = facts.get("minutes")
+    transfer_value = facts.get("transfer_value")
+    if minutes:
+        context_bits.append(f"{minutes} minutes")
+    if transfer_value:
+        context_bits.append(f"value {transfer_value}")
+    context_text = ", ".join(bit for bit in context_bits if bit)
+
+    best_metric = strengths[0] if strengths else None
+    support_metric = strengths[1] if len(strengths) > 1 else None
+    edge_text = strength_text
+    if best_metric and support_metric:
+        best_metric_text = (
+            f"{best_metric['metric']} "
+            f"({best_metric['value']}, {best_metric['percentile']}th percentile)"
+        )
+        support_metric_text = (
+            f"{support_metric['metric']} "
+            f"({support_metric['value']}, {support_metric['percentile']}th percentile)"
+        )
+        edge_text = f"{best_metric_text} backs up {support_metric_text}"
+    elif best_metric:
+        edge_text = (
+            f"{best_metric['metric']} "
+            f"({best_metric['value']}, {best_metric['percentile']}th percentile)"
+        )
+
+    market_bits = []
+    if facts.get("recommendation"):
+        market_bits.append(f"Rec {facts['recommendation']}")
+    if facts.get("potential"):
+        market_bits.append(f"Potential {facts['potential']}")
+    if facts.get("wage"):
+        market_bits.append(f"Wage {facts['wage']}")
+    market_text = "; ".join(market_bits)
+
     why_fit = (
         f"{player_name}: {lead} for '{brief}'.\n"
-        f"- Key metrics: {strength_text}.\n"
-        f"- System fit: profile aligns with {requested_text}.\n"
-        f"- Role context: {position}."
+        f"- Player context: {context_text}.\n"
+        f"- Key metrics: {edge_text}.\n"
+        f"- System fit: {score_band.capitalize()} match for {requested_text}."
     )
+    if market_text:
+        why_fit = f"{why_fit}\n- Market snapshot: {market_text}."
 
     trade_off = facts.get("trade_off")
     if trade_off:
@@ -241,17 +334,23 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
             f"{trade_off['metric']} ({trade_off['value']}, {trade_off['percentile']}th percentile)"
         )
         caveat = (
-            "- Risk: weakest requested indicator is "
-            f"{trade_off_text}.\n"
-            "- Check: confirm this trade-off is acceptable for your tactical plan."
+            "- Risk: profile drops off most on "
+            f"{trade_off_text}, "
+            "so the fit is stronger for systems that can live with that compromise."
         )
     else:
-        caveat = "- Risk: validate role familiarity and tactical fit before final decision."
+        caveat = (
+            "- Risk: the data is broad rather than spiky, so role precision matters "
+            "more than headline fit."
+        )
 
     primary_metric = strengths[0]["metric"] if strengths else "the target metrics"
+    supporting_metric = strengths[1]["metric"] if len(strengths) > 1 else requested_text
     tactical_use = (
-        f"- Usage: deploy as {position} in a setup that leans on {primary_metric}.\n"
-        "- Coaching note: pair with nearby support roles to protect weaker phases."
+        f"- Usage: deploy as {position} in a setup that leans on {primary_metric} "
+        f"and gives him repeated {supporting_metric} actions.\n"
+        f"- Coaching note: shape the role around {player_name}'s output at "
+        f"{club_name}, not just the headline rank."
     )
     return {"why_fit": why_fit, "caveat": caveat, "tactical_use": tactical_use}
 
@@ -271,8 +370,11 @@ def _llm_rewrite_explanation(
         "(no markdown fences). "
         "why_fit must include: a one-line verdict, a 'Key metrics' bullet "
         "with at least two supplied metrics with values/percentiles, "
-        "a 'System fit' bullet tied to the brief, and a 'Role context' bullet. "
-        "caveat must include a clear risk bullet and one mitigation/check bullet. "
+        "a 'Player context' bullet using club, nationality, position, minutes "
+        "or market facts when supplied, "
+        "and a 'System fit' bullet tied to the brief. "
+        "caveat must contain exactly one risk bullet and must not include any "
+        "'Check', 'Mitigation', or second bullet. "
         "tactical_use must include a usage bullet and a coaching-note bullet "
         "with system guidance.\n\n"
         f"FACTS:\n{json.dumps(facts, ensure_ascii=True)}\n\n"
