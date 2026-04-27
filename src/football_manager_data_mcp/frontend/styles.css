@@ -174,7 +174,7 @@ button:disabled {
 }
 
 .button-danger {
-  background: linear-gradient(145deg, #8e153a, #ba1f50);
+  background: linear-gradient(145deg, #000000, #000000);
 }
 
 .button-danger:hover {

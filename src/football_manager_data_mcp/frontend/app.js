@@ -86,7 +86,7 @@ function renderRankCards(entries) {
       const minutesLabel = (minutes !== undefined && minutes !== null && String(minutes).trim() !== "")
         ? String(minutes)
         : "unknown";
-      const explanationSource = explanation.source === "llm" ? "local llm" : explanation.source;
+      const explanationSource = explanation.source || "unknown";
       return `
         <article class="rank-card">
           <h3>${rankBadge(index)} ${escapeHtml(rankHeadline(index))}: ${escapeHtml(entry.player.name)}</h3>

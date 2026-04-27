@@ -80,6 +80,9 @@ run: ## Start the MCP server over stdio
 
 run-ui: ## Start the browser UI server
 	@echo "Starting football-manager-data-ui on http://127.0.0.1:8000"
+	@set -a; \
+	if [ -f .env ]; then . ./.env; fi; \
+	set +a; \
 	uv run football-manager-data-ui
 
 stop-local: ## Stop local UI server and Ollama daemon

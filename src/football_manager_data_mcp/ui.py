@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated, Any
 from urllib import error, request
+from urllib.parse import urlparse
 
 import uvicorn
 from dotenv import load_dotenv
@@ -113,6 +114,20 @@ LLM_BASE_URL = os.getenv(
 )
 
 app.mount("/frontend", StaticFiles(directory=frontend_dir), name="frontend")
+
+
+def _llm_source_name() -> str:
+    parsed_base_url = urlparse(LLM_BASE_URL)
+    host = (parsed_base_url.netloc or "").lower()
+    model_name = LLM_MODEL.lower()
+
+    if "groq" in host or model_name.startswith("groq/"):
+        return "Groq"
+    if "ollama" in host or "127.0.0.1:11434" in host or "localhost:11434" in host:
+        return "local llm"
+    if "openai" in host or model_name.startswith("gpt-"):
+        return "OpenAI-compatible"
+    return "llm"
 
 
 def _percentile_for_value(values: list[float], value: float, prefer_low: bool) -> int:
@@ -260,6 +275,7 @@ def _llm_rewrite_explanation(
             },
             {"role": "user", "content": prompt},
         ],
+        "response_format": {"type": "json_object"},
         "temperature": 0.6,
     }
     req = request.Request(
@@ -269,6 +285,8 @@ def _llm_rewrite_explanation(
         headers={
             "Authorization": f"Bearer {LLM_API_KEY}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "football-manager-data-mcp/0.1",
         },
     )
 
@@ -315,13 +333,23 @@ def _parse_json_like_content(content: str) -> dict[str, Any]:
         text = text[4:].strip()
 
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        if isinstance(parsed, str):
+            parsed = json.loads(parsed)
+        if not isinstance(parsed, dict):
+            raise json.JSONDecodeError("JSON content is not an object", text, 0)
+        return parsed
     except json.JSONDecodeError:
         start = text.find("{")
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
             raise
-        return json.loads(text[start : end + 1])
+        parsed = json.loads(text[start : end + 1])
+        if isinstance(parsed, str):
+            parsed = json.loads(parsed)
+        if not isinstance(parsed, dict):
+            raise json.JSONDecodeError("JSON content is not an object", text, start)
+        return parsed
 
 
 @app.get("/")
@@ -450,7 +478,7 @@ def api_rank(
         fallback = _deterministic_explanation(facts)
         llm_result = _llm_rewrite_explanation(facts, fallback)
         if llm_result:
-            entry["explanation"] = {**llm_result, "source": "llm", "facts": facts}
+            entry["explanation"] = {**llm_result, "source": _llm_source_name(), "facts": facts}
         else:
             entry["explanation"] = {**fallback, "source": "rules", "facts": facts}
 
