@@ -49,6 +49,20 @@ body {
   overflow: hidden;
 }
 
+.hero-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.hero-actions-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .hero::after {
   content: "";
   position: absolute;
@@ -151,19 +165,25 @@ textarea {
   resize: vertical;
 }
 
-button {
+button,
+.button-link {
   border: none;
   border-radius: 10px;
   padding: 0.6rem 0.9rem;
   font: inherit;
+  text-decoration: none;
   cursor: pointer;
   background: linear-gradient(145deg, var(--accent), var(--accent-2));
   color: #fff;
   font-weight: 600;
   transition: transform 140ms ease, opacity 120ms ease, filter 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-button:hover {
+button:hover,
+.button-link:hover {
   transform: translateY(-1px);
   filter: brightness(1.08);
 }
@@ -179,6 +199,11 @@ button:disabled {
 
 .button-danger:hover {
   filter: brightness(1.07);
+}
+
+.hero-download-link {
+  position: relative;
+  z-index: 1;
 }
 
 .helper-guide {
@@ -305,6 +330,21 @@ th {
 @media (max-width: 640px) {
   body {
     padding: 0.75rem;
+  }
+
+  .hero-actions {
+    justify-content: stretch;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .hero-download-link {
+    width: 100%;
+  }
+
+  .hero-actions-note {
+    font-size: 0.8rem;
   }
 
   .brand-lockup {

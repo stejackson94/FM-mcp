@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
 import threading
+import zipfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated, Any
@@ -13,7 +15,7 @@ from urllib.parse import urlparse
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from football_manager_data_mcp.catalog import FootballCatalog
@@ -23,6 +25,11 @@ logger = logging.getLogger(__name__)
 frontend_dir = Path(__file__).resolve().parent / "frontend"
 input_data_dir = Path(__file__).resolve().parents[2] / "input_data"
 project_root_dir = Path(__file__).resolve().parents[2]
+fm_views_dir = project_root_dir / "fm_views"
+required_view_files = [
+    "General Metrics search.fmf",
+    "General Metrics scouted.fmf",
+]
 
 # Auto-load local .env so runtime config works without sourcing shell vars.
 load_dotenv(project_root_dir / ".env")
@@ -512,6 +519,29 @@ def api_data_status() -> dict[str, Any]:
         "uploaded_files": uploaded_files,
         "player_count": len(catalog._players),
     }
+
+
+@app.get("/api/download-required-views")
+def api_download_required_views() -> Response:
+    missing_files = [name for name in required_view_files if not (fm_views_dir / name).is_file()]
+    if missing_files:
+        raise HTTPException(
+            status_code=404,
+            detail=("Required FM view files are missing: " + ", ".join(sorted(missing_files))),
+        )
+
+    archive_buffer = io.BytesIO()
+    with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for filename in required_view_files:
+            archive.write(fm_views_dir / filename, arcname=filename)
+
+    return Response(
+        content=archive_buffer.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="fm-required-views.zip"',
+        },
+    )
 
 
 @app.post("/api/upload")
