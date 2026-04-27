@@ -93,3 +93,36 @@ def test_role_prompt_mezzala_resolves_to_central_midfield_positions(
 
     assert ranked
     assert all("m (c)" in ranked_player["player"]["position"].lower() for ranked_player in ranked)
+
+
+def test_catalog_normalizes_name_and_pressing_headers(tmp_path: Path) -> None:
+    html_path = tmp_path / "variant.html"
+    html_path.write_text(
+        """
+        <html><body><table>
+        <tr>
+            <th>Name</th>
+            <th>Club</th>
+            <th>Pres C</th>
+            <th>Mins</th>
+            <th>Transfer Value</th>
+        </tr>
+        <tr>
+            <td>Giovanni Di Lorenzo</td>
+            <td>Napoli</td>
+            <td>4.11</td>
+            <td>1050</td>
+            <td>45M € - 64M €</td>
+        </tr>
+        </table></body></html>
+        """,
+        encoding="utf-8",
+    )
+
+    variant_catalog = FootballCatalog(players_html_path=html_path)
+    players = variant_catalog.search_players(query="Giovanni")
+
+    assert players
+    assert players[0]["name"] == "Giovanni Di Lorenzo"
+    assert "Player" in players[0]["metrics"]
+    assert "Pres C/90" in players[0]["metrics"]

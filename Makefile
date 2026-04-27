@@ -49,8 +49,10 @@ install-dev: ## Install runtime and development dependencies
 	uv sync --extra dev
 
 setup-hooks: ## Set up pre-commit hooks
-	@echo "Installing pre-commit hooks..."
-	uv run --extra dev pre-commit install
+	@echo "Installing pre-commit hooks (pre-commit + commit-msg)..."
+	@-git config --unset-all core.hooksPath
+	@uv run --extra dev pre-commit install --hook-type pre-commit --hook-type commit-msg
+	@echo "Installed pre-commit-managed hooks for code quality and commit messages"
 
 check: ## Run lock validation, lint, format check, and tests
 	@echo "Checking lock file consistency with pyproject.toml"
