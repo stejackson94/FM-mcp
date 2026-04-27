@@ -166,6 +166,27 @@ jobs:
       - name: Smoke test
         env:
           HOST: ${{ steps.host.outputs.host }}
+          USER: ${{ secrets.EC2_USER }}
         run: |
-          curl --fail --max-time 10 "http://$HOST/health"
-          curl --fail --max-time 10 "http://$HOST/api/data-status"
+          set -euo pipefail
+
+          # Validate from inside the instance to avoid CI runner network/Security Group false negatives.
+          ssh "$USER@$HOST" 'set -euo pipefail
+            for endpoint in /health /api/data-status; do
+              ok=0
+              for attempt in $(seq 1 24); do
+                if curl --fail --silent --show-error --max-time 10 "http://127.0.0.1${endpoint}" >/dev/null; then
+                  ok=1
+                  break
+                fi
+                sleep 5
+              done
+
+              if [[ "$ok" -ne 1 ]]; then
+                echo "Smoke test failed for ${endpoint}"
+                sudo docker ps -a --filter name=fm-mcp-ui || true
+                sudo docker logs --tail 200 fm-mcp-ui || true
+                exit 1
+              fi
+            done
+          '
