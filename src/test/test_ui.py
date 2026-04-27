@@ -1,4 +1,15 @@
-from football_manager_data_mcp.ui import _build_explanation_facts, _deterministic_explanation
+from __future__ import annotations
+
+import io
+import zipfile
+
+from fastapi.testclient import TestClient
+
+from football_manager_data_mcp.ui import (
+    _build_explanation_facts,
+    _deterministic_explanation,
+    app,
+)
 
 
 def test_player_explanation_uses_player_specific_context() -> None:
@@ -62,3 +73,19 @@ def test_player_explanation_uses_player_specific_context() -> None:
     assert "Check:" not in explanation["caveat"]
     assert explanation["caveat"].startswith("- Risk: profile drops off most on ")
     assert "Alex Finley's output at Hibernian" in explanation["tactical_use"]
+
+
+def test_download_required_views_returns_zip_archive() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/download-required-views")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert response.headers["content-disposition"] == 'attachment; filename="fm-required-views.zip"'
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert sorted(archive.namelist()) == [
+            "General Metrics scouted.fmf",
+            "General Metrics search.fmf",
+        ]
