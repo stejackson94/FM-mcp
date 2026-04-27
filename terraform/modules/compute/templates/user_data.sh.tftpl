@@ -1,0 +1,46 @@
+#!/bin/bash
+set -euxo pipefail
+
+yum update -y
+yum install -y docker
+systemctl enable docker
+systemctl start docker
+
+mkdir -p ${container_runtime_dir}
+mkdir -p ${container_runtime_dir}/uploads
+
+cat > ${container_runtime_dir}/deploy.sh <<'DEPLOY'
+#!/bin/bash
+set -euxo pipefail
+
+IMAGE="$1"
+RUNTIME_DIR="${container_runtime_dir}"
+INTERNAL_PORT="${initial_container_port}"
+
+if docker ps -a --format '{{.Names}}' | grep -q '^fm-mcp-ui$'; then
+  docker rm -f fm-mcp-ui
+fi
+
+docker pull "$IMAGE"
+
+docker run -d \
+  --name fm-mcp-ui \
+  --restart always \
+  -p 80:"$INTERNAL_PORT" \
+  --env-file "$RUNTIME_DIR/.env" \
+  -v "$RUNTIME_DIR/uploads:/app/input_data/ui_uploads" \
+  "$IMAGE"
+DEPLOY
+
+chmod +x ${container_runtime_dir}/deploy.sh
+
+cat > ${container_runtime_dir}/.env <<ENVVARS
+FM_UI_HOST=0.0.0.0
+FM_UI_PORT=${initial_container_port}
+FM_AUTO_CLEAR_UPLOADS=true
+FM_AUTO_CLEAR_UPLOADS_INTERVAL_SECONDS=${auto_clear_interval_secs}
+FM_ENABLE_LLM_EXPLANATIONS=true
+FM_LLM_MODEL=qwen2.5:7b-instruct
+FM_LLM_BASE_URL=http://127.0.0.1:11434/v1
+FM_LLM_API_KEY=local-dev
+ENVVARS
