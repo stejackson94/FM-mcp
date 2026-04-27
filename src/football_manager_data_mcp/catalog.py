@@ -5,6 +5,11 @@ from dataclasses import asdict, dataclass
 from html import unescape
 from pathlib import Path
 
+_COLUMN_ALIASES = {
+    "Name": "Player",
+    "Pres C": "Pres C/90",
+}
+
 
 def _normalize_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
@@ -82,6 +87,7 @@ def _read_players_table(players_html_path: Path) -> list[dict[str, str]]:
     headers = [
         re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", cell))).strip() for cell in header_cells
     ]
+    headers = [_COLUMN_ALIASES.get(header, header) for header in headers]
 
     table_rows: list[dict[str, str]] = []
     for row in rows[1:]:

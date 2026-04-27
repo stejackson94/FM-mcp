@@ -35,7 +35,6 @@ catalog = FootballCatalog()
 _REQUIRED_COLUMNS = {
     "Player",
     "Club",
-    "Position",
     "Mins",
     "Gls",
     "Ast",

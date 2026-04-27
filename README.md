@@ -49,7 +49,13 @@ make setup
 ```
 
 This creates a local `.env` (from `.env.example` if missing), installs all
-dependencies, and configures pre-commit hooks.
+dependencies, and configures pre-commit-managed Git hooks.
+
+Commits now auto-run Ruff lint fixes and formatting for staged Python files,
+then re-stage those fixes before the commit continues.
+
+Commit messages are also validated against Conventional Commits
+(for example: `feat(ui): add upload status badge`).
 
 To recreate `.env` manually at any time:
 
@@ -131,6 +137,7 @@ make check    # lock validation + lint + format check + tests
 make test     # run tests only
 make lint     # ruff lint with auto-fix
 make format   # ruff format
+make setup-hooks # reinstall repository git hooks
 make run      # start the server manually over stdio
 make run-ui   # start browser UI at http://127.0.0.1:8000
 make local-llm # configure local LLM defaults in .env
