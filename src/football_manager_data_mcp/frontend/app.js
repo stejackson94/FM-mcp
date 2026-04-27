@@ -86,14 +86,17 @@ function renderRankCards(entries) {
       const minutesLabel = (minutes !== undefined && minutes !== null && String(minutes).trim() !== "")
         ? String(minutes)
         : "unknown";
+      const explanationSource = explanation.source === "llm" ? "local llm" : explanation.source;
       return `
         <article class="rank-card">
           <h3>${rankBadge(index)} ${escapeHtml(rankHeadline(index))}: ${escapeHtml(entry.player.name)}</h3>
           <p><strong>Club:</strong> ${escapeHtml(entry.player.club_name)} | <strong>Position:</strong> ${escapeHtml(entry.player.position)}</p>
           <p><strong>Minutes:</strong> ${escapeHtml(minutesLabel)}</p>
           <p><strong>Matched metrics:</strong> ${escapeHtml(metrics)}</p>
-          <p><strong>Why he fits:</strong> ${escapeHtml(explanation.whyFit)}</p>
-          <p><strong>Caveat:</strong> ${escapeHtml(explanation.caveat)}</p>
+          <p><strong>Why he fits:</strong> ${formatNarrative(explanation.whyFit)}</p>
+          <p><strong>Tactical use:</strong> ${formatNarrative(explanation.tacticalUse)}</p>
+          <p><strong>Caveat:</strong> ${formatNarrative(explanation.caveat)}</p>
+          <p><strong>Explanation source:</strong> ${escapeHtml(explanationSource)}</p>
         </article>
       `;
     })
@@ -117,7 +120,9 @@ function rankedTableRows(entries) {
       minutes: minutesLabel,
       matched_metrics: formatMatchedMetrics(entry.matched_metrics),
       why_he_fits: explanation.whyFit,
+      tactical_use: explanation.tacticalUse,
       caveat: explanation.caveat,
+      explanation_source: explanation.source,
     };
   });
 }
@@ -144,6 +149,10 @@ function formatMatchedMetrics(metrics) {
   return entries
     .map(([metric, value]) => `${metric}: ${formatMetricValue(value)}`)
     .join(" | ");
+}
+
+function formatNarrative(text) {
+  return escapeHtml(text).replaceAll("\n", "<br>");
 }
 
 function getTopMatchedMetrics(metrics, count = 2) {
@@ -193,7 +202,9 @@ function buildWhyFit(entry, index, total) {
     caveat = "Caveat: Versatile profile may be less role-pure than a specialist.";
   }
 
-  return { whyFit, caveat };
+  const tacticalUse = `Tactical use: play in a role that maximizes ${topMetrics[0] || "the top matched metric"} while protecting weaker phases with structure around him.`;
+
+  return { whyFit, caveat, tacticalUse };
 }
 
 function normalizeExplanation(entry, index, total) {
@@ -202,16 +213,23 @@ function normalizeExplanation(entry, index, total) {
     serverExplanation
     && typeof serverExplanation.why_fit === "string"
     && typeof serverExplanation.caveat === "string"
+    && typeof serverExplanation.tactical_use === "string"
   ) {
     return {
       whyFit: serverExplanation.why_fit,
       caveat: serverExplanation.caveat,
+      tacticalUse: serverExplanation.tactical_use,
       source: serverExplanation.source || "server",
     };
   }
 
   const fallback = buildWhyFit(entry, index, total);
-  return { whyFit: fallback.whyFit, caveat: fallback.caveat, source: "local" };
+  return {
+    whyFit: fallback.whyFit,
+    caveat: fallback.caveat,
+    tacticalUse: fallback.tacticalUse,
+    source: "local",
+  };
 }
 
 async function callApi(path, params = {}) {
@@ -256,6 +274,8 @@ async function refreshDataSource() {
 
 document.getElementById("rankButton").addEventListener("click", async () => {
   setStatus("Ranking players...");
+  tableWrapEl.innerHTML = "";
+  metaEl.innerHTML = "Preparing new ranking...";
   try {
     const data = await callApi("/api/rank", {
       prompt: document.getElementById("rankPrompt").value,

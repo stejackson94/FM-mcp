@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from urllib import error, request
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +18,11 @@ from football_manager_data_mcp.catalog import FootballCatalog
 app = FastAPI(title="Make FM Scouting Data Again", version="0.1.0")
 frontend_dir = Path(__file__).resolve().parent / "frontend"
 input_data_dir = Path(__file__).resolve().parents[2] / "input_data"
+project_root_dir = Path(__file__).resolve().parents[2]
+
+# Auto-load local .env so runtime config works without sourcing shell vars.
+load_dotenv(project_root_dir / ".env")
+
 uploaded_data_dir = input_data_dir / "ui_uploads"
 uploaded_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -99,9 +105,12 @@ LLM_ENABLED_BY_DEFAULT = os.getenv("FM_ENABLE_LLM_EXPLANATIONS", "true").lower()
     "yes",
     "on",
 }
-LLM_MODEL = os.getenv("FM_LLM_MODEL", "gpt-4o-mini")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+LLM_MODEL = os.getenv("FM_LLM_MODEL", "qwen2.5:7b-instruct")
+# Prefer neutral Local LLM vars while keeping legacy OPENAI_* compatibility.
+LLM_API_KEY = os.getenv("FM_LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+LLM_BASE_URL = os.getenv(
+    "FM_LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
+)
 
 app.mount("/frontend", StaticFiles(directory=frontend_dir), name="frontend")
 
@@ -123,6 +132,7 @@ def _build_explanation_facts(
     total_ranked: int,
     ranked_pool: list[dict[str, Any]],
     prefer_low: bool,
+    prompt: str,
 ) -> dict[str, Any]:
     player = entry.get("player", {})
     matched_metrics = entry.get("matched_metrics", {})
@@ -156,6 +166,8 @@ def _build_explanation_facts(
         "player_name": player.get("name", "Unknown"),
         "club_name": player.get("club_name", "Unknown"),
         "position": player.get("position", ""),
+        "search_brief": prompt.strip(),
+        "evaluation_mode": "lower_better" if prefer_low else "higher_better",
         "rank": rank_index + 1,
         "total_ranked": total_ranked,
         "score": round(float(entry.get("score", 0.0)), 4),
@@ -172,10 +184,14 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
         for item in strengths
     ]
     strength_text = ", ".join(strength_bits) if strength_bits else "consistent all-round output"
+    requested = [str(item) for item in facts.get("requested_metrics", []) if str(item).strip()]
+    requested_text = ", ".join(requested) if requested else "the requested profile"
+    brief = str(facts.get("search_brief", "")).strip() or "the requested scouting brief"
+    player_name = str(facts.get("player_name", "This player"))
+    position = str(facts.get("position", "")).strip() or "multiple roles"
 
     rank = int(facts.get("rank", 1))
     total = int(facts.get("total_ranked", 1))
-    position = str(facts.get("position", "")).strip() or "multiple roles"
 
     if rank == 1:
         lead = "Best fit in this result set"
@@ -184,20 +200,30 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
     else:
         lead = f"Useful profile (ranked #{rank} of {total})"
 
-    why_fit = f"{lead}. Strongest indicators are {strength_text}. Role coverage: {position}."
+    why_fit = (
+        f"{player_name}: {lead} for '{brief}'.\n"
+        f"- Key metrics: {strength_text}.\n"
+        f"- System fit: profile aligns with {requested_text}.\n"
+        f"- Role context: {position}."
+    )
 
     trade_off = facts.get("trade_off")
     if trade_off:
+        trade_off_text = (
+            f"{trade_off['metric']} ({trade_off['value']}, {trade_off['percentile']}th percentile)"
+        )
         caveat = (
-            "Caveat: weakest of the requested indicators is "
-            f"{trade_off['metric']} ({trade_off['value']}, {trade_off['percentile']}th percentile)."
+            "- Risk: weakest requested indicator is "
+            f"{trade_off_text}.\n"
+            "- Check: confirm this trade-off is acceptable for your tactical plan."
         )
     else:
-        caveat = "Caveat: validate role familiarity and tactical fit before final decision."
+        caveat = "- Risk: validate role familiarity and tactical fit before final decision."
 
+    primary_metric = strengths[0]["metric"] if strengths else "the target metrics"
     tactical_use = (
-        "Best used in a system that prioritizes the requested metrics "
-        "while protecting weaker areas."
+        f"- Usage: deploy as {position} in a setup that leans on {primary_metric}.\n"
+        "- Coaching note: pair with nearby support roles to protect weaker phases."
     )
     return {"why_fit": why_fit, "caveat": caveat, "tactical_use": tactical_use}
 
@@ -205,15 +231,22 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
 def _llm_rewrite_explanation(
     facts: dict[str, Any], fallback: dict[str, str]
 ) -> dict[str, str] | None:
-    if not LLM_ENABLED_BY_DEFAULT or not OPENAI_API_KEY:
+    if not LLM_ENABLED_BY_DEFAULT or not LLM_API_KEY:
         return None
 
     prompt = (
         "You are a football recruitment analyst. "
-        "Rewrite the provided factual profile into concise, tailored scouting commentary. "
+        "Write a personalized scouting recommendation for the exact search brief. "
         "Use only supplied facts; do not invent or alter numbers. "
         "Return strict JSON with keys why_fit, caveat, tactical_use. "
-        "Keep each value to 1-2 sentences.\n\n"
+        "Format each value as plain text with line breaks and '-' bullets "
+        "(no markdown fences). "
+        "why_fit must include: a one-line verdict, a 'Key metrics' bullet "
+        "with at least two supplied metrics with values/percentiles, "
+        "a 'System fit' bullet tied to the brief, and a 'Role context' bullet. "
+        "caveat must include a clear risk bullet and one mitigation/check bullet. "
+        "tactical_use must include a usage bullet and a coaching-note bullet "
+        "with system guidance.\n\n"
         f"FACTS:\n{json.dumps(facts, ensure_ascii=True)}\n\n"
         f"SAFE_FALLBACK:\n{json.dumps(fallback, ensure_ascii=True)}"
     )
@@ -227,14 +260,14 @@ def _llm_rewrite_explanation(
             },
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0.4,
+        "temperature": 0.6,
     }
     req = request.Request(
-        url=f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions",
+        url=f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {LLM_API_KEY}",
             "Content-Type": "application/json",
         },
     )
@@ -247,7 +280,7 @@ def _llm_rewrite_explanation(
 
     try:
         content = body["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
+        parsed = _parse_json_like_content(content)
         why_fit = str(parsed["why_fit"]).strip()
         caveat = str(parsed["caveat"]).strip()
         tactical_use = str(parsed["tactical_use"]).strip()
@@ -261,6 +294,34 @@ def _llm_rewrite_explanation(
         "caveat": caveat,
         "tactical_use": tactical_use,
     }
+
+
+def _parse_json_like_content(content: str) -> dict[str, Any]:
+    text = str(content or "").strip()
+    if not text:
+        raise json.JSONDecodeError("Empty content", text, 0)
+
+    # Some local models wrap JSON in markdown fences despite instructions.
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+    # Handle language-prefixed fenced blocks like "json".
+    if text.lower().startswith("json"):
+        text = text[4:].strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        return json.loads(text[start : end + 1])
 
 
 @app.get("/")
@@ -384,6 +445,7 @@ def api_rank(
             total_ranked=len(ranked_pool),
             ranked_pool=ranked_pool,
             prefer_low=prefer_low,
+            prompt=prompt,
         )
         fallback = _deterministic_explanation(facts)
         llm_result = _llm_rewrite_explanation(facts, fallback)

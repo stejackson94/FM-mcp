@@ -48,7 +48,23 @@ cd football-manager-data-mcp
 make setup
 ```
 
-This installs all dependencies and configures pre-commit hooks.
+This creates a local `.env` (from `.env.example` if missing), installs all
+dependencies, and configures pre-commit hooks.
+
+To recreate `.env` manually at any time:
+
+```bash
+make environment
+```
+
+The UI backend auto-loads `.env` at runtime, so you do not need to run
+`source .env` manually.
+
+To auto-configure local LLM defaults (Ollama + model + `.env` values):
+
+```bash
+make local-llm
+```
 
 ---
 
@@ -117,6 +133,7 @@ make lint     # ruff lint with auto-fix
 make format   # ruff format
 make run      # start the server manually over stdio
 make run-ui   # start browser UI at http://127.0.0.1:8000
+make local-llm # configure local LLM defaults in .env
 make lock     # refresh uv.lock
 ```
 
@@ -176,9 +193,15 @@ The UI rank endpoint uses a hybrid approach:
 Environment variables:
 
 - `FM_ENABLE_LLM_EXPLANATIONS=true` (default)
-- `OPENAI_API_KEY=<your_key>`
-- `FM_LLM_MODEL=gpt-4o-mini` (default)
-- `OPENAI_BASE_URL=https://api.openai.com/v1` (default)
+- `FM_LLM_MODEL=qwen2.5:7b-instruct` (default)
+- `FM_LLM_BASE_URL=http://127.0.0.1:11434/v1` (default)
+- `FM_LLM_API_KEY=local-dev` (default for local providers)
+
+Legacy `OPENAI_API_KEY` and `OPENAI_BASE_URL` are still accepted for backward
+compatibility.
+
+Use `make environment` to generate `.env` from `.env.example` if you do not
+already have one.
 
 ## Example Searches
 
