@@ -12,6 +12,5 @@ __pycache__
 *.log
 input_data
 example_data
-fm_views
 .env
 .env.*
