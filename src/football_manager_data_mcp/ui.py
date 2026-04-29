@@ -23,9 +23,13 @@ from football_manager_data_mcp.catalog import FootballCatalog
 app = FastAPI(title="Make FM Scouting Data Again", version="0.1.0")
 logger = logging.getLogger(__name__)
 frontend_dir = Path(__file__).resolve().parent / "frontend"
+package_root_dir = Path(__file__).resolve().parent
 input_data_dir = Path(__file__).resolve().parents[2] / "input_data"
 project_root_dir = Path(__file__).resolve().parents[2]
-fm_views_dir = project_root_dir / "fm_views"
+fm_views_dirs = [
+    project_root_dir / "fm_views",
+    package_root_dir / "fm_views",
+]
 required_view_files = [
     "General Metrics search.fmf",
     "General Metrics scouted.fmf",
@@ -69,6 +73,121 @@ _REQUIRED_COLUMNS = {
     "Transfer Value",
 }
 
+FORMATION_PRESETS: dict[str, dict[str, Any]] = {
+    "4-3-3-dm-wide": {
+        "label": "4-3-3 DM Wide",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("DR", "Right back"),
+            ("DCR", "Right centre-back"),
+            ("DCL", "Left centre-back"),
+            ("DL", "Left back"),
+            ("DM", "Holding midfielder"),
+            ("MCR", "Right central midfielder"),
+            ("MCL", "Left central midfielder"),
+            ("AMR", "Right winger"),
+            ("ST", "Striker"),
+            ("AML", "Left winger"),
+        ],
+    },
+    "4-2-3-1-wide": {
+        "label": "4-2-3-1 Wide",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("DR", "Right back"),
+            ("DCR", "Right centre-back"),
+            ("DCL", "Left centre-back"),
+            ("DL", "Left back"),
+            ("MCR", "Right pivot"),
+            ("MCL", "Left pivot"),
+            ("AMR", "Right attacking flank"),
+            ("AMC", "Central creator"),
+            ("AML", "Left attacking flank"),
+            ("ST", "Lone striker"),
+        ],
+    },
+    "4-4-2": {
+        "label": "4-4-2",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("DR", "Right back"),
+            ("DCR", "Right centre-back"),
+            ("DCL", "Left centre-back"),
+            ("DL", "Left back"),
+            ("MR", "Right midfield"),
+            ("MCR", "Right central midfield"),
+            ("MCL", "Left central midfield"),
+            ("ML", "Left midfield"),
+            ("STR", "Right striker"),
+            ("STL", "Left striker"),
+        ],
+    },
+    "4-4-2-diamond-narrow": {
+        "label": "4-4-2 Diamond Narrow",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("DR", "Right back"),
+            ("DCR", "Right centre-back"),
+            ("DCL", "Left centre-back"),
+            ("DL", "Left back"),
+            ("DM", "Base of midfield diamond"),
+            ("MCR", "Right shuttler"),
+            ("MCL", "Left shuttler"),
+            ("AMC", "Tip of the diamond"),
+            ("STR", "Right striker"),
+            ("STL", "Left striker"),
+        ],
+    },
+    "3-4-3-dm-wide": {
+        "label": "3-4-3 DM Wide",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("DCR", "Right centre-back"),
+            ("DC", "Central stopper"),
+            ("DCL", "Left centre-back"),
+            ("WBR", "Right wing-back"),
+            ("DM", "Holding midfielder"),
+            ("MC", "Central midfielder"),
+            ("WBL", "Left wing-back"),
+            ("AMR", "Right inside-forward lane"),
+            ("ST", "Central striker"),
+            ("AML", "Left inside-forward lane"),
+        ],
+    },
+    "3-5-2": {
+        "label": "3-5-2",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("DCR", "Right centre-back"),
+            ("DC", "Central stopper"),
+            ("DCL", "Left centre-back"),
+            ("WBR", "Right wing-back"),
+            ("MCR", "Right central midfield"),
+            ("MC", "Central midfield hub"),
+            ("MCL", "Left central midfield"),
+            ("WBL", "Left wing-back"),
+            ("STR", "Right striker"),
+            ("STL", "Left striker"),
+        ],
+    },
+    "5-2-3-wb": {
+        "label": "5-2-3 WB",
+        "lanes": [
+            ("GK", "Goalkeeper"),
+            ("WBR", "Right wing-back"),
+            ("DCR", "Right centre-back"),
+            ("DC", "Central centre-back"),
+            ("DCL", "Left centre-back"),
+            ("WBL", "Left wing-back"),
+            ("MCR", "Right central midfield"),
+            ("MCL", "Left central midfield"),
+            ("AMR", "Right forward"),
+            ("ST", "Central striker"),
+            ("AML", "Left forward"),
+        ],
+    },
+}
+
 
 def _uploaded_html_files() -> list[Path]:
     return sorted(uploaded_data_dir.glob("*.html"))
@@ -104,6 +223,14 @@ def _validate_columns(new_catalog: FootballCatalog) -> list[str]:
         str(item["column"]) for item in new_catalog.list_available_columns() if "column" in item
     }
     return sorted(_REQUIRED_COLUMNS - available_columns)
+
+
+def _resolve_required_view_file(filename: str) -> Path | None:
+    for base_dir in fm_views_dirs:
+        candidate = base_dir / filename
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 _reload_catalog()
@@ -177,6 +304,261 @@ def _format_fact_value(value: Any) -> str | None:
     return text or None
 
 
+def _resolve_formation(formation: str | None) -> tuple[str | None, dict[str, Any] | None]:
+    if not formation:
+        return None, None
+    formation_key = str(formation).strip().lower()
+    if not formation_key:
+        return None, None
+    return formation_key, FORMATION_PRESETS.get(formation_key)
+
+
+def _augment_prompt_with_formation(prompt: str, formation_label: str | None) -> str:
+    base_prompt = prompt.strip()
+    if not formation_label:
+        return base_prompt
+    return (
+        f"{base_prompt}. Formation context: {formation_label}." if base_prompt else formation_label
+    )
+
+
+def _position_term_matches_slot(position_term: str, slot_code: str) -> bool:
+    return bool(_term_capabilities(position_term) & _slot_capabilities(slot_code))
+
+
+def _slot_capabilities(slot_code: str) -> set[str]:
+    slot = str(slot_code or "").upper().strip()
+    if not slot:
+        return set()
+
+    if slot == "GK":
+        return {"GK"}
+    if slot in {"WBR"}:
+        return {"WBR"}
+    if slot in {"WBL"}:
+        return {"WBL"}
+    if slot in {"DR"}:
+        return {"DR"}
+    if slot in {"DL"}:
+        return {"DL"}
+    if slot in {"DC", "DCR", "DCL"}:
+        return {"DC"}
+    if slot == "DM":
+        return {"DM"}
+    if slot in {"MR"}:
+        return {"MR"}
+    if slot in {"ML"}:
+        return {"ML"}
+    if slot in {"MC", "MCR", "MCL"}:
+        return {"MC"}
+    if slot == "AMR":
+        return {"AMR"}
+    if slot == "AML":
+        return {"AML"}
+    if slot == "AMC":
+        return {"AMC"}
+    if slot.startswith("ST"):
+        return {"ST"}
+    return set()
+
+
+def _parse_position_group(base: str, sides: str) -> set[str]:
+    normalized_base = base.strip().lower()
+    letters = {char for char in sides.upper() if char in {"R", "L", "C"}}
+    if not letters:
+        letters = {"C"}
+
+    if normalized_base == "wb":
+        return ({"WBR"} if "R" in letters else set()) | ({"WBL"} if "L" in letters else set())
+    if normalized_base == "d":
+        return (
+            ({"DR"} if "R" in letters else set())
+            | ({"DL"} if "L" in letters else set())
+            | ({"DC"} if "C" in letters else set())
+        )
+    if normalized_base == "m":
+        return (
+            ({"MR"} if "R" in letters else set())
+            | ({"ML"} if "L" in letters else set())
+            | ({"MC"} if "C" in letters else set())
+        )
+    if normalized_base == "am":
+        return (
+            ({"AMR"} if "R" in letters else set())
+            | ({"AML"} if "L" in letters else set())
+            | ({"AMC"} if "C" in letters else set())
+        )
+    if normalized_base == "st":
+        return {"ST"}
+    if normalized_base == "dm":
+        return {"DM"}
+    if normalized_base == "gk":
+        return {"GK"}
+    return set()
+
+
+def _text_position_capabilities(position_text: str) -> set[str]:
+    text = str(position_text or "").strip().lower()
+    if not text:
+        return set()
+
+    capabilities: set[str] = set()
+    chunks = [part.strip() for part in text.split(",") if part.strip()]
+    for chunk in chunks:
+        if "(" in chunk and ")" in chunk:
+            base, _, suffix = chunk.partition("(")
+            sides = suffix.split(")", maxsplit=1)[0]
+            capabilities.update(_parse_position_group(base, sides))
+            continue
+
+        token = chunk.strip()
+        if token in {"gk", "dm", "st"}:
+            capabilities.update(_parse_position_group(token, "c"))
+            continue
+        if token in {"wb", "d", "m", "am"}:
+            capabilities.update(_parse_position_group(token, "rlc"))
+            continue
+        if token == "dc":
+            capabilities.add("DC")
+        if token == "mc":
+            capabilities.add("MC")
+
+    return capabilities
+
+
+def _term_capabilities(position_term: str) -> set[str]:
+    return _text_position_capabilities(position_term)
+
+
+def _constrain_position_terms_to_formation(
+    position: str | None, formation_key: str | None
+) -> str | None:
+    if not position or not formation_key:
+        return position
+
+    formation = FORMATION_PRESETS.get(formation_key)
+    if not formation:
+        return position
+
+    terms = [part.strip().lower() for part in str(position).split("|") if part.strip()]
+    if not terms:
+        return position
+
+    allowed_capabilities = {
+        capability
+        for slot_code, _slot_label in formation.get("lanes", [])
+        for capability in _slot_capabilities(slot_code)
+    }
+    constrained_terms = [term for term in terms if _term_capabilities(term) & allowed_capabilities]
+    if not constrained_terms:
+        return None
+    return "|".join(constrained_terms)
+
+
+def _entry_matches_position_terms(entry: dict[str, Any], position_terms: str | None) -> bool:
+    if not position_terms:
+        return True
+    player = entry.get("player", {})
+    player_position = str(player.get("position", ""))
+    terms = [part.strip().lower() for part in str(position_terms).split("|") if part.strip()]
+    if not terms:
+        return True
+
+    player_capabilities = _text_position_capabilities(player_position)
+    if not player_capabilities:
+        return False
+    return any(_term_capabilities(term) & player_capabilities for term in terms)
+
+
+def _position_tokens(position_text: str) -> set[str]:
+    normalized = str(position_text or "").upper()
+    tokens: set[str] = set()
+    if not normalized:
+        return tokens
+
+    for token in ("GK", "WB", "DM", "AM", "ST", "DC", "MC", "MR", "ML", "DR", "DL"):
+        if token in normalized:
+            tokens.add(token)
+    for token in ("R", "L", "C"):
+        if f"({token}" in normalized or token + ")" in normalized or f", {token}" in normalized:
+            tokens.add(token)
+    if "WBR" in normalized or "WB (R" in normalized:
+        tokens.update({"WB", "R"})
+    if "WBL" in normalized or "WB (L" in normalized:
+        tokens.update({"WB", "L"})
+    return tokens
+
+
+def _formation_slot_match_score(slot_code: str, position_tokens: set[str]) -> int:
+    score = 0
+    slot = slot_code.upper()
+    if not position_tokens:
+        return score
+
+    if slot.startswith("GK") and "GK" in position_tokens:
+        score += 10
+    if slot.startswith("WB") and "WB" in position_tokens:
+        score += 9
+    if slot.startswith("DC") and "DC" in position_tokens:
+        score += 8
+    if (
+        slot.startswith("D")
+        and not slot.startswith("DC")
+        and any(token in position_tokens for token in {"DR", "DL"})
+    ):
+        score += 7
+    if slot.startswith("DM") and "DM" in position_tokens:
+        score += 8
+    if slot.startswith("MC") and "MC" in position_tokens:
+        score += 8
+    if slot.startswith("M") and any(token in position_tokens for token in {"MR", "ML"}):
+        score += 7
+    if slot.startswith("AM") and "AM" in position_tokens:
+        score += 8
+    if slot.startswith("ST") and "ST" in position_tokens:
+        score += 9
+
+    if "R" in slot and "R" in position_tokens:
+        score += 2
+    if "L" in slot and "L" in position_tokens:
+        score += 2
+    if "C" in slot and "C" in position_tokens:
+        score += 1
+    if slot in {"DC", "MC", "ST"}:
+        score += 1
+    return score
+
+
+def _formation_advice(position_text: str, formation_key: str | None) -> dict[str, str] | None:
+    if not formation_key:
+        return None
+    formation = FORMATION_PRESETS.get(formation_key)
+    if not formation:
+        return None
+
+    position_tokens = _position_tokens(position_text)
+    if not position_tokens:
+        return None
+
+    ranked_slots = sorted(
+        (
+            (slot_code, slot_label, _formation_slot_match_score(slot_code, position_tokens))
+            for slot_code, slot_label in formation["lanes"]
+        ),
+        key=lambda item: item[2],
+        reverse=True,
+    )
+    best_slot_code, best_slot_label, best_score = ranked_slots[0]
+    if best_score <= 0:
+        return None
+
+    return {
+        "slot_code": best_slot_code,
+        "slot_label": best_slot_label,
+        "formation_label": str(formation["label"]),
+    }
+
+
 def _describe_score_band(score: float) -> str:
     if score >= 0.75:
         return "elite"
@@ -239,12 +621,14 @@ def _build_explanation_facts(
     wage = _format_fact_value(player.get("wage"))
     rec = _format_fact_value(player.get("rec"))
     potential = _format_fact_value(player.get("potential"))
+    formation_key, formation = _resolve_formation(entry.get("formation"))
+    formation_advice = _formation_advice(_clean_player_text(player.get("position")), formation_key)
 
     return {
         "player_name": player.get("name", "Unknown"),
-        "club_name": player.get("club_name", "Unknown"),
-        "nationality": _clean_player_text(player.get("nationality"), "Unknown"),
-        "position": player.get("position", ""),
+        "club_name": _clean_player_text(player.get("club_name")),
+        "nationality": _clean_player_text(player.get("nationality")),
+        "position": _clean_player_text(player.get("position")),
         "search_brief": prompt.strip(),
         "evaluation_mode": "lower_better" if prefer_low else "higher_better",
         "rank": rank_index + 1,
@@ -260,47 +644,56 @@ def _build_explanation_facts(
         "recommendation": rec,
         "potential": potential,
         "player_context": player_context,
+        "formation": str(formation["label"]) if formation else "",
+        "formation_advice": formation_advice,
     }
 
 
 def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
     strengths = facts.get("strengths", [])
-    strength_bits = [
-        f"{item['metric']} ({item['value']}, {item['percentile']}th percentile)"
-        for item in strengths
-    ]
-    strength_text = ", ".join(strength_bits) if strength_bits else "consistent all-round output"
     requested = [str(item) for item in facts.get("requested_metrics", []) if str(item).strip()]
     requested_text = ", ".join(requested) if requested else "the requested profile"
     brief = str(facts.get("search_brief", "")).strip() or "the requested scouting brief"
     player_name = str(facts.get("player_name", "This player"))
     position = str(facts.get("position", "")).strip() or "multiple roles"
-    club_name = str(facts.get("club_name", "Unknown"))
-    nationality = str(facts.get("nationality", "Unknown"))
+    club_name = _clean_player_text(facts.get("club_name"))
+    nationality = _clean_player_text(facts.get("nationality"))
     score_band = str(facts.get("score_band", "balanced"))
 
     rank = int(facts.get("rank", 1))
     total = int(facts.get("total_ranked", 1))
 
     if rank == 1:
-        lead = "Best fit in this result set"
+        lead = f"{player_name} is the strongest match in this result set"
     elif rank <= 3:
-        lead = f"Top-tier option (ranked #{rank} of {total})"
+        lead = f"{player_name} profiles as a top-tier option at #{rank} of {total}"
     else:
-        lead = f"Useful profile (ranked #{rank} of {total})"
+        lead = f"{player_name} still offers a usable fit at #{rank} of {total}"
 
-    context_bits = [f"{nationality} at {club_name}", position]
+    context_bits: list[str] = []
+    if nationality and club_name:
+        context_bits.append(f"{nationality} at {club_name}")
+    elif club_name:
+        context_bits.append(f"At {club_name}")
+    elif nationality:
+        context_bits.append(nationality)
+    if position:
+        context_bits.append(position)
     minutes = facts.get("minutes")
     transfer_value = facts.get("transfer_value")
     if minutes:
         context_bits.append(f"{minutes} minutes")
     if transfer_value:
         context_bits.append(f"value {transfer_value}")
-    context_text = ", ".join(bit for bit in context_bits if bit)
+    context_text = (
+        ", ".join(bit for bit in context_bits if bit) or "Limited club context in this export"
+    )
 
     best_metric = strengths[0] if strengths else None
     support_metric = strengths[1] if len(strengths) > 1 else None
-    edge_text = strength_text
+    evidence_text = (
+        "The export does not include enough matched numeric evidence to isolate a clear edge."
+    )
     if best_metric and support_metric:
         best_metric_text = (
             f"{best_metric['metric']} "
@@ -310,12 +703,16 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
             f"{support_metric['metric']} "
             f"({support_metric['value']}, {support_metric['percentile']}th percentile)"
         )
-        edge_text = f"{best_metric_text} backs up {support_metric_text}"
+        evidence_text = (
+            f"{best_metric_text} and {support_metric_text} "
+            f"are the clearest indicators for the brief."
+        )
     elif best_metric:
-        edge_text = (
+        best_metric_text = (
             f"{best_metric['metric']} "
             f"({best_metric['value']}, {best_metric['percentile']}th percentile)"
         )
+        evidence_text = f"{best_metric_text} stands out most strongly in this result set."
 
     market_bits = []
     if facts.get("recommendation"):
@@ -327,10 +724,10 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
     market_text = "; ".join(market_bits)
 
     why_fit = (
-        f"{player_name}: {lead} for '{brief}'.\n"
-        f"- Player context: {context_text}.\n"
-        f"- Key metrics: {edge_text}.\n"
-        f"- System fit: {score_band.capitalize()} match for {requested_text}."
+        f"{lead} for '{brief}'.\n"
+        f"- Profile: {context_text}.\n"
+        f"- Evidence: {evidence_text}.\n"
+        f"- System fit: {score_band.capitalize()} match when the role leans on {requested_text}."
     )
     if market_text:
         why_fit = f"{why_fit}\n- Market snapshot: {market_text}."
@@ -353,12 +750,22 @@ def _deterministic_explanation(facts: dict[str, Any]) -> dict[str, str]:
 
     primary_metric = strengths[0]["metric"] if strengths else "the target metrics"
     supporting_metric = strengths[1]["metric"] if len(strengths) > 1 else requested_text
-    tactical_use = (
-        f"- Usage: deploy as {position} in a setup that leans on {primary_metric} "
-        f"and gives him repeated {supporting_metric} actions.\n"
-        f"- Coaching note: shape the role around {player_name}'s output at "
-        f"{club_name}, not just the headline rank."
+    formation = _clean_player_text(facts.get("formation"))
+    formation_advice = facts.get("formation_advice") or {}
+    slot_label = _clean_player_text(formation_advice.get("slot_label"))
+    slot_code = _clean_player_text(formation_advice.get("slot_code"))
+
+    usage_text = (
+        f"deploy as {position} in a setup that leans on {primary_metric} "
+        f"and gives him repeated {supporting_metric} actions"
     )
+    if formation and slot_label and slot_code:
+        usage_text = (
+            f"in {formation}, use him as the {slot_label} ({slot_code}) "
+            f"if you want those {primary_metric} "
+            f"actions to show up consistently"
+        )
+    tactical_use = f"- Usage: {usage_text}."
     return {"why_fit": why_fit, "caveat": caveat, "tactical_use": tactical_use}
 
 
@@ -375,15 +782,17 @@ def _llm_rewrite_explanation(
         "Return strict JSON with keys why_fit, caveat, tactical_use. "
         "Format each value as plain text with line breaks and '-' bullets "
         "(no markdown fences). "
-        "why_fit must include: a one-line verdict, a 'Key metrics' bullet "
-        "with at least two supplied metrics with values/percentiles, "
-        "a 'Player context' bullet using club, nationality, position, minutes "
-        "or market facts when supplied, "
+        "why_fit must include: a one-line verdict, a 'Profile' bullet using club, "
+        "nationality, position, minutes or market facts when supplied, "
+        "an 'Evidence' bullet with at least two supplied metrics with values/percentiles "
+        "and why they matter for the brief, "
         "and a 'System fit' bullet tied to the brief. "
         "caveat must contain exactly one risk bullet and must not include any "
         "'Check', 'Mitigation', or second bullet. "
-        "tactical_use must include a usage bullet and a coaching-note bullet "
-        "with system guidance.\n\n"
+        "If formation and formation_advice are supplied, tactical_use must mention "
+        "the named formation "
+        "slot and explain where to play the player inside that shape. "
+        "tactical_use must contain exactly one usage bullet with system guidance.\n\n"
         f"FACTS:\n{json.dumps(facts, ensure_ascii=True)}\n\n"
         f"SAFE_FALLBACK:\n{json.dumps(fallback, ensure_ascii=True)}"
     )
@@ -523,7 +932,8 @@ def api_data_status() -> dict[str, Any]:
 
 @app.get("/api/download-required-views")
 def api_download_required_views() -> Response:
-    missing_files = [name for name in required_view_files if not (fm_views_dir / name).is_file()]
+    resolved_files = {name: _resolve_required_view_file(name) for name in required_view_files}
+    missing_files = [name for name, path in resolved_files.items() if path is None]
     if missing_files:
         raise HTTPException(
             status_code=404,
@@ -533,7 +943,7 @@ def api_download_required_views() -> Response:
     archive_buffer = io.BytesIO()
     with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for filename in required_view_files:
-            archive.write(fm_views_dir / filename, arcname=filename)
+            archive.write(resolved_files[filename], arcname=filename)
 
     return Response(
         content=archive_buffer.getvalue(),
@@ -610,6 +1020,7 @@ def api_search(
 @app.get("/api/rank")
 def api_rank(
     prompt: str = Query(default=""),
+    formation: str | None = Query(default=None),
     position: str | None = Query(default=None),
     country: str | None = Query(default=None),
     min_minutes: float | None = Query(default=None, ge=0),
@@ -618,16 +1029,35 @@ def api_rank(
     if not prompt.strip():
         raise HTTPException(status_code=400, detail="Query parameter 'prompt' is required.")
 
-    resolved_position = position.strip().lower() if position else catalog._infer_position(prompt)
+    _formation_key, resolved_formation = _resolve_formation(formation)
+    effective_prompt = _augment_prompt_with_formation(
+        prompt,
+        str(resolved_formation["label"]) if resolved_formation else None,
+    )
+
+    resolved_position = (
+        position.strip().lower() if position else catalog._infer_position(effective_prompt)
+    )
+    resolved_position = _constrain_position_terms_to_formation(resolved_position, _formation_key)
+    if formation and resolved_position is None:
+        return []
+
     normalized_country = country.strip().lower() if country else None
-    prefer_low = catalog._prefer_low(prompt)
+    prefer_low = catalog._prefer_low(effective_prompt)
 
     ranked_pool = catalog.rank_players_by_preferences(
-        prompt=prompt,
+        prompt=effective_prompt,
         position=resolved_position,
         country=normalized_country,
         limit=max(len(catalog._players), 1),
     )
+
+    if resolved_position:
+        ranked_pool = [
+            entry
+            for entry in ranked_pool
+            if _entry_matches_position_terms(entry, resolved_position)
+        ]
 
     if min_minutes is not None:
         filtered_pool: list[dict[str, Any]] = []
@@ -643,6 +1073,9 @@ def api_rank(
 
     ranked_subset = ranked_pool[:limit]
 
+    for entry in ranked_subset:
+        entry["formation"] = formation
+
     for index, entry in enumerate(ranked_subset):
         facts = _build_explanation_facts(
             entry=entry,
@@ -650,7 +1083,7 @@ def api_rank(
             total_ranked=len(ranked_pool),
             ranked_pool=ranked_pool,
             prefer_low=prefer_low,
-            prompt=prompt,
+            prompt=effective_prompt,
         )
         fallback = _deterministic_explanation(facts)
         llm_result = _llm_rewrite_explanation(facts, fallback)

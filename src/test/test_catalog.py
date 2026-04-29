@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from football_manager_data_mcp.catalog import FootballCatalog
+from football_manager_data_mcp.catalog import FootballCatalog, _position_capabilities
 
 _EXAMPLE_HTML = Path(__file__).resolve().parents[2] / "example_data" / "103.html"
 
@@ -78,7 +78,7 @@ def test_role_prompt_false_nine_resolves_to_forward_positions(
 
     assert ranked
     assert all(
-        any(token in ranked_player["player"]["position"].lower() for token in ["st", "am (c)"])
+        bool(_position_capabilities(str(ranked_player["player"]["position"])) & {"ST", "AMC"})
         for ranked_player in ranked
     )
 
@@ -92,7 +92,10 @@ def test_role_prompt_mezzala_resolves_to_central_midfield_positions(
     )
 
     assert ranked
-    assert all("m (c)" in ranked_player["player"]["position"].lower() for ranked_player in ranked)
+    assert all(
+        "MC" in _position_capabilities(str(ranked_player["player"]["position"]))
+        for ranked_player in ranked
+    )
 
 
 def test_catalog_normalizes_name_and_pressing_headers(tmp_path: Path) -> None:
@@ -126,3 +129,46 @@ def test_catalog_normalizes_name_and_pressing_headers(tmp_path: Path) -> None:
     assert players[0]["name"] == "Giovanni Di Lorenzo"
     assert "Player" in players[0]["metrics"]
     assert "Pres C/90" in players[0]["metrics"]
+
+
+def test_match_position_handles_multi_role_grouped_sides(tmp_path: Path) -> None:
+    html_path = tmp_path / "positions.html"
+    html_path.write_text(
+        """
+        <html><body><table>
+        <tr>
+            <th>Player</th>
+            <th>Club</th>
+            <th>Position</th>
+            <th>Mins</th>
+            <th>xG/90</th>
+            <th>Pas %</th>
+            <th>Transfer Value</th>
+        </tr>
+        <tr>
+            <td>David Wide</td>
+            <td>Sample FC</td>
+            <td>AM (RLC), ST (C)</td>
+            <td>1200</td>
+            <td>0.30</td>
+            <td>82</td>
+            <td>£4.0M</td>
+        </tr>
+        <tr>
+            <td>Byron Mid</td>
+            <td>Sample FC</td>
+            <td>M (R)</td>
+            <td>1200</td>
+            <td>0.25</td>
+            <td>79</td>
+            <td>£2.0M</td>
+        </tr>
+        </table></body></html>
+        """,
+        encoding="utf-8",
+    )
+
+    position_catalog = FootballCatalog(players_html_path=html_path)
+    results = position_catalog.search_players(query="", position="am (l)|am (r)", limit=10)
+
+    assert [player["name"] for player in results] == ["David Wide"]

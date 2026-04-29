@@ -81,22 +81,35 @@ function renderRankCards(entries) {
   const cards = entries
     .map((entry, index) => {
       const explanation = normalizeExplanation(entry, index, entries.length);
-      const metrics = formatMatchedMetrics(entry.matched_metrics);
+      const player = entry.player ?? {};
+      const meta = buildPlayerMeta(player);
       const minutes = entry?.player?.metrics?.Mins;
       const minutesLabel = (minutes !== undefined && minutes !== null && String(minutes).trim() !== "")
         ? String(minutes)
-        : "unknown";
+        : "Not listed";
       const explanationSource = explanation.source || "unknown";
       return `
         <article class="rank-card">
           <h3>${rankBadge(index)} ${escapeHtml(rankHeadline(index))}: ${escapeHtml(entry.player.name)}</h3>
-          <p><strong>Club:</strong> ${escapeHtml(entry.player.club_name)} | <strong>Position:</strong> ${escapeHtml(entry.player.position)}</p>
-          <p><strong>Minutes:</strong> ${escapeHtml(minutesLabel)}</p>
-          <p><strong>Matched metrics:</strong> ${escapeHtml(metrics)}</p>
-          <p><strong>Why he fits:</strong> ${formatNarrative(explanation.whyFit)}</p>
-          <p><strong>Tactical use:</strong> ${formatNarrative(explanation.tacticalUse)}</p>
-          <p><strong>Caveat:</strong> ${formatNarrative(explanation.caveat)}</p>
-          <p><strong>Explanation source:</strong> ${escapeHtml(explanationSource)}</p>
+          <p class="rank-card-meta">${meta}</p>
+          <p class="rank-card-meta"><strong>Minutes:</strong> ${escapeHtml(minutesLabel)}</p>
+          <section class="rank-card-section">
+            <strong>Matched Metrics</strong>
+            <div class="metric-list">${renderMatchedMetrics(entry.matched_metrics)}</div>
+          </section>
+          <section class="rank-card-section">
+            <strong>Why He Fits</strong>
+            <div class="rank-card-copy">${formatNarrative(explanation.whyFit)}</div>
+          </section>
+          <section class="rank-card-section">
+            <strong>Role Use</strong>
+            <div class="rank-card-copy">${formatNarrative(explanation.tacticalUse)}</div>
+          </section>
+          <section class="rank-card-section">
+            <strong>Risk</strong>
+            <div class="rank-card-copy">${formatNarrative(explanation.caveat)}</div>
+          </section>
+          <p class="rank-card-source"><strong>Explanation source:</strong> ${escapeHtml(explanationSource)}</p>
         </article>
       `;
     })
@@ -148,7 +161,50 @@ function formatMatchedMetrics(metrics) {
 
   return entries
     .map(([metric, value]) => `${metric}: ${formatMetricValue(value)}`)
-    .join(" | ");
+    .join(", ");
+}
+
+function normalizePlayerText(value) {
+  const text = String(value ?? "").trim();
+  if (!text || text === "-" || text.toLowerCase() === "unknown") {
+    return "";
+  }
+  return text;
+}
+
+function buildPlayerMeta(player) {
+  const clubName = normalizePlayerText(player?.club_name);
+  const position = normalizePlayerText(player?.position);
+  const nationality = normalizePlayerText(player?.nationality);
+  const parts = [];
+
+  if (clubName) {
+    parts.push(`<strong>Club:</strong> ${escapeHtml(clubName)}`);
+  }
+  if (position) {
+    parts.push(`<strong>Position:</strong> ${escapeHtml(position)}`);
+  }
+  if (nationality) {
+    parts.push(`<strong>Nation:</strong> ${escapeHtml(nationality)}`);
+  }
+
+  return parts.join("<span class=\"rank-card-dot\">•</span>") || "<strong>Player context:</strong> Not listed";
+}
+
+function renderMatchedMetrics(metrics) {
+  const entries = Object.entries(metrics ?? {});
+  if (!entries.length) {
+    return '<span class="metric-chip metric-chip-empty">No matched numeric metrics</span>';
+  }
+
+  return entries
+    .map(([metric, value]) => (`
+      <span class="metric-chip">
+        <span class="metric-chip-label">${escapeHtml(metric)}</span>
+        <span class="metric-chip-value">${escapeHtml(formatMetricValue(value))}</span>
+      </span>
+    `).trim())
+    .join("");
 }
 
 function formatNarrative(text) {
@@ -182,18 +238,27 @@ function scoreBand(score) {
 function buildWhyFit(entry, index, total) {
   const topMetrics = getTopMatchedMetrics(entry.matched_metrics, 2);
   const profile = scoreBand(entry.score);
-  const position = entry.player?.position || "multiple roles";
+  const playerName = normalizePlayerText(entry.player?.name) || "This player";
+  const position = normalizePlayerText(entry.player?.position) || "multiple roles";
+  const clubName = normalizePlayerText(entry.player?.club_name);
+  const nationality = normalizePlayerText(entry.player?.nationality);
+  const context = [nationality && clubName ? `${nationality} at ${clubName}` : nationality || clubName, position]
+    .filter(Boolean)
+    .join(", ") || "Limited club context in this export";
 
   const opener =
     index === 0
-      ? "Best fit in this result set"
-      : `Ranked #${index + 1} of ${total}`;
+      ? `${playerName} is the strongest match in this result set`
+      : `${playerName} ranks #${index + 1} of ${total}`;
 
   const metricSummary = topMetrics.length
-    ? `Key strengths: ${topMetrics.join(", ")}.`
-    : "Matches the requested profile but with limited numeric evidence in this export.";
+    ? `${topMetrics.join(" and ")} are the clearest indicators for this brief.`
+    : "The export shows a workable profile, but with limited numeric evidence in this result.";
 
-  const whyFit = `${opener}. ${metricSummary} Overall profile is ${profile} for this brief.`;
+  const whyFit = `${opener}.
+- Profile: ${context}.
+- Evidence: ${metricSummary}
+- System fit: ${profile.charAt(0).toUpperCase()}${profile.slice(1)} match for the requested role.`;
 
   let caveat = "Caveat: Review full attributes and role familiarity before signing.";
   if (profile === "situational") {
@@ -202,7 +267,7 @@ function buildWhyFit(entry, index, total) {
     caveat = "Caveat: Versatile profile may be less role-pure than a specialist.";
   }
 
-  const tacticalUse = `Tactical use: play in a role that maximizes ${topMetrics[0] || "the top matched metric"} while protecting weaker phases with structure around him.`;
+  const tacticalUse = `- Usage: play as ${position} in a role that maximizes ${topMetrics[0] || "the top matched metric"} while giving him repeatable actions in his strongest phases.`;
 
   return { whyFit, caveat, tacticalUse };
 }
@@ -279,6 +344,7 @@ document.getElementById("rankButton").addEventListener("click", async () => {
   try {
     const data = await callApi("/api/rank", {
       prompt: document.getElementById("rankPrompt").value,
+      formation: document.getElementById("rankFormation").value,
       min_minutes: document.getElementById("rankMinMinutes").value,
       limit: document.getElementById("rankLimit").value,
     });

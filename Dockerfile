@@ -10,6 +10,7 @@ COPY ./pyproject.toml ./uv.lock ./README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY ./src ./src
+COPY ./fm_views ./fm_views
 
 RUN uv sync --frozen --no-dev
 

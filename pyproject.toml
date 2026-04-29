@@ -54,7 +54,12 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-football_manager_data_mcp = ["frontend/*.html", "frontend/*.css", "frontend/*.js"]
+football_manager_data_mcp = [
+    "frontend/*.html",
+    "frontend/*.css",
+    "frontend/*.js",
+    "fm_views/*.fmf",
+]
 
 [tool.uv]
 managed = true
