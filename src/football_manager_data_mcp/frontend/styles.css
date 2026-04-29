@@ -28,7 +28,9 @@ body {
     linear-gradient(145deg, var(--bg) 0%, var(--bg-2) 58%, #070a34 100%),
     var(--bg);
   min-height: 100vh;
+  height: 100vh;
   padding: 1.5rem;
+  overflow: hidden;
 }
 
 .shell {
@@ -36,7 +38,9 @@ body {
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 1rem;
+  height: calc(100vh - 3rem);
 }
 
 .hero {
@@ -233,6 +237,15 @@ button:disabled {
   color: var(--ink);
 }
 
+.helper-guide ol {
+  margin: 0.2rem 0 0.35rem 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
 .helper-guide code {
   background: rgba(205, 213, 234, 0.16);
   padding: 0.05rem 0.25rem;
@@ -251,7 +264,16 @@ button:disabled {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#tableWrap {
   overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .rank-cards {
@@ -264,6 +286,8 @@ button:disabled {
   border-radius: 12px;
   padding: 0.8rem;
   background: var(--panel-strong);
+  display: grid;
+  gap: 0.65rem;
 }
 
 .rank-card h3 {
@@ -274,6 +298,67 @@ button:disabled {
 .rank-card p {
   margin: 0.25rem 0;
   line-height: 1.35;
+}
+
+.rank-card-meta {
+  color: var(--muted);
+}
+
+.rank-card-dot {
+  display: inline-block;
+  margin: 0 0.45rem;
+  color: var(--line-strong);
+}
+
+.rank-card-section {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rank-card-section strong {
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.rank-card-copy {
+  line-height: 1.45;
+}
+
+.rank-card-source {
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.metric-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(205, 213, 234, 0.18);
+  background: rgba(205, 213, 234, 0.08);
+}
+
+.metric-chip-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.metric-chip-value {
+  font-weight: 700;
+}
+
+.metric-chip-empty {
+  color: var(--muted);
 }
 
 table {
@@ -329,7 +414,15 @@ th {
 
 @media (max-width: 640px) {
   body {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
     padding: 0.75rem;
+  }
+
+  .shell {
+    height: auto;
+    grid-template-rows: auto;
   }
 
   .hero-actions {

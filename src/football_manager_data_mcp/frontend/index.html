@@ -43,6 +43,19 @@
             <input id="rankMinMinutes" type="number" min="0" placeholder="1000" />
           </div>
           <div>
+            <label for="rankFormation">Formation (optional)</label>
+            <select id="rankFormation">
+              <option value="" selected>No formation context</option>
+              <option value="4-3-3-dm-wide">4-3-3 DM Wide</option>
+              <option value="4-2-3-1-wide">4-2-3-1 Wide</option>
+              <option value="4-4-2">4-4-2</option>
+              <option value="4-4-2-diamond-narrow">4-4-2 Diamond Narrow</option>
+              <option value="3-4-3-dm-wide">3-4-3 DM Wide</option>
+              <option value="3-5-2">3-5-2</option>
+              <option value="5-2-3-wb">5-2-3 WB</option>
+            </select>
+          </div>
+          <div>
             <label for="rankLimit">Limit</label>
             <input id="rankLimit" type="number" min="1" max="100" value="10" />
           </div>
@@ -70,13 +83,27 @@
           <button id="clubsButton">List Clubs</button>
 
           <details class="helper-guide">
-            <summary>Help: what these buttons do</summary>
+            <summary>Help</summary>
+            <p><strong>What these buttons do</strong></p>
             <ul>
               <li><strong>Upload Data</strong>: uploads one FM HTML export and switches all queries to this uploaded dataset.</li>
               <li><strong>Clear Data</strong>: removes uploaded files and switches back to the default <code>input_data</code> dataset.</li>
               <li><strong>List Available Columns</strong>: shows all parsed columns and which ones are usable for ranking.</li>
               <li><strong>List Clubs</strong>: returns clubs found in the currently active dataset.</li>
             </ul>
+            <p><strong>How to load views in FM</strong></p>
+            <ol>
+              <li>Click <strong>Download Required Views</strong> at the top of this page, then unzip the downloaded file.</li>
+              <li>In Football Manager, go to <strong>Scouting -> Players -> Players in Range</strong>.</li>
+              <li>Open the view menu next to the current view name, then choose <strong>Custom -> Import View...</strong>.</li>
+              <li>In the load dialog, stay on <strong>Local</strong>, set <strong>Location</strong> to the <strong>views</strong> folder, select the file, then click <strong>Load</strong>.</li>
+            </ol>
+            <p class="helper-note">
+              Use <strong>General Metrics search</strong> for <strong>Players in Range</strong>. If you are exporting from <strong>Scouted Players</strong>, use <strong>General Metrics scouted</strong> instead.
+            </p>
+            <p class="helper-note">
+              If the <strong>views</strong> folder is missing under Documents -> Sports Interactive -> Football Manager (your version), create it and place the unzipped <code>.fmf</code> files there.
+            </p>
             <p class="helper-note">Uploaded files are temporary and are auto-cleared periodically.</p>
           </details>
         </div>
