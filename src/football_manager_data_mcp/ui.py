@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +44,15 @@ from football_manager_data_mcp.routes_catalog import router as catalog_router
 from football_manager_data_mcp.routes_data import router as data_router
 from football_manager_data_mcp.routes_rank import router as rank_router
 
-app = FastAPI(title="Make FM Scouting Data Again", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(application: FastAPI):  # noqa: ARG001
+    data_lifecycle.start_background_tasks()
+    yield
+    data_lifecycle.stop_background_tasks()
+
+
+app = FastAPI(title="Make FM Scouting Data Again", version="0.1.0", lifespan=_lifespan)
 logger = logging.getLogger(__name__)
 
 _frontend_dir = Path(__file__).resolve().parent / "frontend"
@@ -135,16 +144,6 @@ app.mount("/frontend", StaticFiles(directory=_frontend_dir), name="frontend")
 app.include_router(data_router)
 app.include_router(rank_router)
 app.include_router(catalog_router)
-
-
-@app.on_event("startup")
-def _startup_tasks() -> None:
-    data_lifecycle.start_background_tasks()
-
-
-@app.on_event("shutdown")
-def _shutdown_tasks() -> None:
-    data_lifecycle.stop_background_tasks()
 
 
 # ---------------------------------------------------------------------------
