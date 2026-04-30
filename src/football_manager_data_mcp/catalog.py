@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass
 from html import unescape
 from pathlib import Path
 
+from football_manager_data_mcp.positions import text_position_capabilities
+
 _COLUMN_ALIASES = {
     "Name": "Player",
     "Pres C": "Pres C/90",
@@ -72,69 +74,8 @@ def _split_club_name(club_cell: str) -> str:
     return primary.strip()
 
 
-def _expand_position_base(base: str, sides: str) -> set[str]:
-    normalized_base = base.strip().lower()
-    letters = {char for char in sides.upper() if char in {"R", "L", "C"}}
-    if not letters:
-        letters = {"C"}
-
-    if normalized_base == "gk":
-        return {"GK"}
-    if normalized_base == "dm":
-        return {"DM"}
-    if normalized_base == "st":
-        return {"ST"}
-    if normalized_base == "dc":
-        return {"DC"}
-    if normalized_base == "mc":
-        return {"MC"}
-    if normalized_base == "wb":
-        return ({"WBR"} if "R" in letters else set()) | ({"WBL"} if "L" in letters else set())
-    if normalized_base == "d":
-        return (
-            ({"DR"} if "R" in letters else set())
-            | ({"DL"} if "L" in letters else set())
-            | ({"DC"} if "C" in letters else set())
-        )
-    if normalized_base == "m":
-        return (
-            ({"MR"} if "R" in letters else set())
-            | ({"ML"} if "L" in letters else set())
-            | ({"MC"} if "C" in letters else set())
-        )
-    if normalized_base == "am":
-        return (
-            ({"AMR"} if "R" in letters else set())
-            | ({"AML"} if "L" in letters else set())
-            | ({"AMC"} if "C" in letters else set())
-        )
-    return set()
-
-
 def _position_capabilities(position_text: str) -> set[str]:
-    text = str(position_text or "").strip().lower()
-    if not text:
-        return set()
-
-    capabilities: set[str] = set()
-    chunks = [part.strip() for part in text.split(",") if part.strip()]
-    for chunk in chunks:
-        if "(" in chunk and ")" in chunk:
-            base_part, _, suffix = chunk.partition("(")
-            sides = suffix.split(")", maxsplit=1)[0]
-            base_variants = [part.strip() for part in base_part.split("/") if part.strip()]
-            for base in base_variants:
-                capabilities.update(_expand_position_base(base, sides))
-            continue
-
-        token = chunk.strip()
-        if token in {"gk", "dm", "st", "dc", "mc"}:
-            capabilities.update(_expand_position_base(token, "c"))
-            continue
-        if token in {"wb", "d", "m", "am"}:
-            capabilities.update(_expand_position_base(token, "rlc"))
-
-    return capabilities
+    return text_position_capabilities(position_text)
 
 
 def _read_players_table(players_html_path: Path) -> list[dict[str, str]]:
@@ -205,18 +146,18 @@ class FootballCatalog:
         "sweeper keeper": ["gk"],
         "sweeper-keeper": ["gk"],
         # Full-back / wing-back roles
-        "wing back": ["wb"],
-        "wingback": ["wb"],
-        "full back": ["d (l)", "d (r)", "wb"],
-        "fullback": ["d (l)", "d (r)", "wb"],
+        "wing back": ["wb", "d (l)", "d (r)"],
+        "wingback": ["wb", "d (l)", "d (r)"],
+        "full back": ["d (l)", "d (r)"],
+        "fullback": ["d (l)", "d (r)"],
         "inverted wing back": ["wb", "d (l)", "d (r)"],
         "inverted wingback": ["wb", "d (l)", "d (r)"],
         "inverted full back": ["d (l)", "d (r)", "wb"],
         "inverted fullback": ["d (l)", "d (r)", "wb"],
         "complete wing back": ["wb"],
         "complete wingback": ["wb"],
-        "no nonsense full back": ["d (l)", "d (r)", "wb"],
-        "no-nonsense full-back": ["d (l)", "d (r)", "wb"],
+        "no nonsense full back": ["d (l)", "d (r)"],
+        "no-nonsense full-back": ["d (l)", "d (r)"],
         # Centre-back roles
         "center back": ["d (c)"],
         "centre back": ["d (c)"],
