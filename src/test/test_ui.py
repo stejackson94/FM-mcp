@@ -6,7 +6,6 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-import football_manager_data_mcp.ui as ui_module
 from football_manager_data_mcp.ui import (
     _augment_prompt_with_formation,
     _build_explanation_facts,
@@ -257,7 +256,7 @@ def test_api_rank_appends_selected_formation_to_prompt(monkeypatch: Any) -> None
                 }
             ]
 
-    monkeypatch.setattr(ui_module, "catalog", StubCatalog())
+    monkeypatch.setattr(app.state.data_lifecycle, "catalog", StubCatalog())
     client = TestClient(app)
 
     response = client.get(
@@ -328,7 +327,7 @@ def test_api_rank_uses_formation_specific_wide_lanes(monkeypatch: Any) -> None:
                 },
             ]
 
-    monkeypatch.setattr(ui_module, "catalog", StubCatalog())
+    monkeypatch.setattr(app.state.data_lifecycle, "catalog", StubCatalog())
     client = TestClient(app)
 
     response = client.get(
