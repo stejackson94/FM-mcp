@@ -146,8 +146,8 @@ class FootballCatalog:
         "sweeper keeper": ["gk"],
         "sweeper-keeper": ["gk"],
         # Full-back / wing-back roles
-        "wing back": ["wb", "d (l)", "d (r)"],
-        "wingback": ["wb", "d (l)", "d (r)"],
+        "wing back": ["wb"],
+        "wingback": ["wb"],
         "full back": ["d (l)", "d (r)"],
         "fullback": ["d (l)", "d (r)"],
         "inverted wing back": ["wb", "d (l)", "d (r)"],
