@@ -172,3 +172,121 @@ def test_match_position_handles_multi_role_grouped_sides(tmp_path: Path) -> None
     results = position_catalog.search_players(query="", position="am (l)|am (r)", limit=10)
 
     assert [player["name"] for player in results] == ["David Wide"]
+
+
+def test_filter_ranked_players_by_prompt_thresholds_assists_more_than(tmp_path: Path) -> None:
+    html_path = tmp_path / "threshold_assists.html"
+    html_path.write_text(
+        """
+        <html><body><table>
+        <tr>
+            <th>Player</th>
+            <th>Club</th>
+            <th>Position</th>
+            <th>Nat</th>
+            <th>Mins</th>
+            <th>Ast</th>
+            <th>xG/90</th>
+            <th>Transfer Value</th>
+        </tr>
+        <tr>
+            <td>Adam Creator</td>
+            <td>Sample FC</td>
+            <td>ST (C)</td>
+            <td>England</td>
+            <td>1500</td>
+            <td>6</td>
+            <td>0.22</td>
+            <td>£5.0M</td>
+        </tr>
+        <tr>
+            <td>Ben Support</td>
+            <td>Sample FC</td>
+            <td>ST (C)</td>
+            <td>England</td>
+            <td>1500</td>
+            <td>4</td>
+            <td>0.24</td>
+            <td>£4.0M</td>
+        </tr>
+        </table></body></html>
+        """,
+        encoding="utf-8",
+    )
+
+    threshold_catalog = FootballCatalog(players_html_path=html_path)
+    ranked = threshold_catalog.rank_players_by_preferences(prompt="high assists", limit=10)
+
+    filtered = threshold_catalog.filter_ranked_players_by_prompt_thresholds(
+        ranked,
+        "i want players who assist more than 5 goals",
+    )
+
+    assert [entry["player"]["name"] for entry in filtered] == ["Adam Creator"]
+
+
+def test_filter_ranked_players_by_prompt_thresholds_xg_of_value(tmp_path: Path) -> None:
+    html_path = tmp_path / "threshold_xg.html"
+    html_path.write_text(
+        """
+        <html><body><table>
+        <tr>
+            <th>Player</th>
+            <th>Club</th>
+            <th>Position</th>
+            <th>Nat</th>
+            <th>Mins</th>
+            <th>Ast</th>
+            <th>xG/90</th>
+            <th>Transfer Value</th>
+        </tr>
+        <tr>
+            <td>Chris Finisher</td>
+            <td>Sample FC</td>
+            <td>ST (C)</td>
+            <td>Spain</td>
+            <td>1400</td>
+            <td>3</td>
+            <td>0.20</td>
+            <td>£7.0M</td>
+        </tr>
+        <tr>
+            <td>Danny Runner</td>
+            <td>Sample FC</td>
+            <td>ST (C)</td>
+            <td>Spain</td>
+            <td>1400</td>
+            <td>2</td>
+            <td>0.18</td>
+            <td>£3.0M</td>
+        </tr>
+        </table></body></html>
+        """,
+        encoding="utf-8",
+    )
+
+    threshold_catalog = FootballCatalog(players_html_path=html_path)
+    ranked = threshold_catalog.rank_players_by_preferences(
+        prompt="find strikers with high xg",
+        limit=10,
+    )
+
+    filtered = threshold_catalog.filter_ranked_players_by_prompt_thresholds(
+        ranked,
+        "i want strikers with xg of 0.20",
+    )
+
+    assert [entry["player"]["name"] for entry in filtered] == ["Chris Finisher"]
+
+
+def test_rank_players_prompt_players_word_does_not_match_name_column(
+    catalog: FootballCatalog,
+) -> None:
+    ranked = catalog.rank_players_by_preferences(
+        prompt="i want players who assist more than 2",
+        limit=20,
+    )
+
+    assert ranked
+    assert "Ast" in ranked[0]["requested_metrics"]
+    assert "Player" not in ranked[0]["requested_metrics"]

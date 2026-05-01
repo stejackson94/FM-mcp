@@ -256,6 +256,12 @@ def test_api_rank_appends_selected_formation_to_prompt(monkeypatch: Any) -> None
                 }
             ]
 
+        def filter_ranked_players_by_prompt_thresholds(
+            self, ranked_players: list[dict[str, Any]], prompt: str
+        ) -> list[dict[str, Any]]:
+            captured["threshold_prompt"] = prompt
+            return ranked_players
+
     monkeypatch.setattr(app.state.data_lifecycle, "catalog", StubCatalog())
     client = TestClient(app)
 
@@ -275,6 +281,7 @@ def test_api_rank_appends_selected_formation_to_prompt(monkeypatch: Any) -> None
         "Need a right-sided runner with crossing output. Formation context: 3-5-2."
     )
     assert captured["infer_prompt"] == captured["rank_prompt"]
+    assert captured["threshold_prompt"] == captured["rank_prompt"]
     assert captured["rank_position"] == "wb"
     assert "Right wing-back (WBR)" in payload[0]["explanation"]["tactical_use"]
 
@@ -326,6 +333,11 @@ def test_api_rank_uses_formation_specific_wide_lanes(monkeypatch: Any) -> None:
                     },
                 },
             ]
+
+        def filter_ranked_players_by_prompt_thresholds(
+            self, ranked_players: list[dict[str, Any]], prompt: str
+        ) -> list[dict[str, Any]]:
+            return ranked_players
 
     monkeypatch.setattr(app.state.data_lifecycle, "catalog", StubCatalog())
     client = TestClient(app)
