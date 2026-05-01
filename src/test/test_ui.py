@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -15,6 +16,8 @@ from football_manager_data_mcp.ui import (
     _formation_advice,
     app,
 )
+
+_EXAMPLE_HTML = Path(__file__).resolve().parents[2] / "example_data" / "103.html"
 
 
 def test_player_explanation_uses_player_specific_context() -> None:
@@ -371,3 +374,33 @@ def test_download_required_views_returns_zip_archive() -> None:
             "General Metrics scouted.fmf",
             "General Metrics search.fmf",
         ]
+
+
+def test_uploaded_data_is_isolated_per_browser_session() -> None:
+    client_a = TestClient(app)
+    client_b = TestClient(app)
+
+    upload_response = client_a.post(
+        "/api/upload",
+        files={"file": ("players_a.html", _EXAMPLE_HTML.read_bytes(), "text/html")},
+    )
+
+    assert upload_response.status_code == 200
+    assert upload_response.json()["mode"] == "uploaded"
+
+    status_a = client_a.get("/api/data-status")
+    status_b = client_b.get("/api/data-status")
+
+    assert status_a.status_code == 200
+    assert status_b.status_code == 200
+    assert status_a.json()["mode"] == "uploaded"
+    assert status_a.json()["uploaded_files"] == ["players_a.html"]
+    assert status_b.json()["mode"] == "default"
+
+    clear_b = client_b.post("/api/clear-data")
+    assert clear_b.status_code == 200
+    assert clear_b.json()["removed_files"] == 0
+
+    status_a_after = client_a.get("/api/data-status")
+    assert status_a_after.status_code == 200
+    assert status_a_after.json()["mode"] == "uploaded"

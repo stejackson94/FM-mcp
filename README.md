@@ -189,6 +189,8 @@ This UI uses the same parsing/ranking logic as the MCP server, so results stay c
 3. The UI switches to the uploaded dataset for all queries.
 4. Click `Clear Data` to remove uploaded files and switch back to default `input_data/` files.
 
+Uploaded files are isolated per browser session, so multiple people can use the UI concurrently without replacing each other's active dataset.
+
 ### LLM Explanations (Default: On)
 
 The UI rank endpoint uses a hybrid approach:
