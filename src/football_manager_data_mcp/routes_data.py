@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from football_manager_data_mcp._deps import get_data_lifecycle
+from football_manager_data_mcp._deps import get_data_lifecycle, get_session_id
 from football_manager_data_mcp.data_lifecycle import DataLifecycleService
 
 router = APIRouter()
@@ -49,8 +49,9 @@ def health() -> dict[str, str]:
 @router.get("/api/data-status")
 def api_data_status(
     data_lifecycle: Annotated[DataLifecycleService, Depends(get_data_lifecycle)],
+    session_id: Annotated[str, Depends(get_session_id)],
 ) -> dict[str, Any]:
-    return data_lifecycle.data_status()
+    return data_lifecycle.data_status(session_id=session_id)
 
 
 @router.get("/api/download-required-views")
@@ -80,15 +81,21 @@ def api_download_required_views() -> Response:
 @router.post("/api/upload")
 async def api_upload(
     data_lifecycle: Annotated[DataLifecycleService, Depends(get_data_lifecycle)],
+    session_id: Annotated[str, Depends(get_session_id)],
     file: Annotated[UploadFile, File(...)],
 ) -> dict[str, Any]:
     filename = file.filename or "upload.html"
     raw_content = await file.read()
-    return data_lifecycle.upload_html(filename=filename, raw_content=raw_content)
+    return data_lifecycle.upload_html(
+        filename=filename,
+        raw_content=raw_content,
+        session_id=session_id,
+    )
 
 
 @router.post("/api/clear-data")
 def api_clear_data(
     data_lifecycle: Annotated[DataLifecycleService, Depends(get_data_lifecycle)],
+    session_id: Annotated[str, Depends(get_session_id)],
 ) -> dict[str, Any]:
-    return data_lifecycle.clear_data()
+    return data_lifecycle.clear_data(session_id=session_id)
