@@ -138,6 +138,13 @@ class Club:
     league: str | None
 
 
+@dataclass(frozen=True)
+class MetricThreshold:
+    metric: str
+    comparator: str
+    value: float
+
+
 class FootballCatalog:
     _POSITION_ALIASES = {
         # Goalkeeper roles
@@ -234,6 +241,9 @@ class FootballCatalog:
 
         self._players = self._build_players(table_rows)
         self._clubs = self._build_clubs(self._players)
+        self._numeric_metric_headers = {
+            metric_name for player in self._players for metric_name in player.numeric_metrics.keys()
+        }
         self._metric_aliases = self._build_metric_aliases(self._players)
 
     def _build_players(self, table_rows: list[dict[str, str]]) -> list[Player]:
@@ -393,6 +403,7 @@ class FootballCatalog:
                         "successful pressures per 90",
                         "press completion per 90",
                         "successful pressing",
+                        "pressing",
                     }
                 )
             if header == "Pres A/90":
@@ -402,10 +413,11 @@ class FootballCatalog:
                         "pressures per 90",
                         "pressing attempts per 90",
                         "pressing per 90",
+                        "pressing",
                     }
                 )
             if header == "K Ps/90":
-                alias_set.update({"key passes per 90", "key passes"})
+                alias_set.update({"key passes per 90", "key passes", "key pass"})
             if header == "xG/90":
                 alias_set.update(
                     {
@@ -429,7 +441,7 @@ class FootballCatalog:
             if header == "Gls":
                 alias_set.update({"goals", "total goals"})
             if header == "Ast":
-                alias_set.update({"assists", "total assists"})
+                alias_set.update({"assists", "total assists", "assist"})
             if header == "Mins":
                 alias_set.update(
                     {
@@ -471,9 +483,122 @@ class FootballCatalog:
         normalized_prompt = _normalize_text(prompt)
         requested: list[str] = []
         for header, aliases in self._metric_aliases.items():
+            if header not in self._numeric_metric_headers:
+                continue
             if any(alias and alias in normalized_prompt for alias in aliases):
                 requested.append(header)
         return requested
+
+    def _extract_metric_thresholds(self, prompt: str) -> list[MetricThreshold]:
+        lowered_prompt = prompt.lower()
+        if not lowered_prompt.strip():
+            return []
+
+        comparator_patterns: list[tuple[str, str]] = [
+            (r"(?:more\s+than|greater\s+than|over|above)\s*(-?\d+(?:\.\d+)?)", "gt"),
+            (r"(?:at\s+least|minimum\s+of|minimum|no\s+less\s+than|>=)\s*(-?\d+(?:\.\d+)?)", "gte"),
+            (r"(?:less\s+than|fewer\s+than|under|below)\s*(-?\d+(?:\.\d+)?)", "lt"),
+            (r"(?:at\s+most|maximum\s+of|maximum|no\s+more\s+than|<=)\s*(-?\d+(?:\.\d+)?)", "lte"),
+            (r"(?:equal\s+to|equals|exactly|=)\s*(-?\d+(?:\.\d+)?)", "eq"),
+            # Treat "xg of 0.20" style prompts as a minimum threshold.
+            (r"(?:of|around|about)\s*(-?\d+(?:\.\d+)?)", "gte"),
+            # Final fallback for "xg 0.20" style prompts.
+            (r"(-?\d+(?:\.\d+)?)", "gte"),
+        ]
+
+        thresholds: list[MetricThreshold] = []
+        seen: set[tuple[str, str, float]] = set()
+
+        for header, aliases in self._metric_aliases.items():
+            if header not in self._numeric_metric_headers:
+                continue
+            # Check longer aliases first to avoid short phrase collisions.
+            sorted_aliases = sorted((alias for alias in aliases if alias), key=len, reverse=True)
+            for alias in sorted_aliases:
+                alias_words = [re.escape(word) for word in alias.split() if word]
+                if not alias_words:
+                    continue
+
+                alias_pattern = r"\b" + r"\W+".join(alias_words) + r"\b"
+                for match in re.finditer(alias_pattern, lowered_prompt):
+                    window = lowered_prompt[match.end() : match.end() + 40]
+                    parsed: MetricThreshold | None = None
+                    for pattern, comparator in comparator_patterns:
+                        threshold_match = re.search(pattern, window)
+                        if threshold_match is None:
+                            continue
+                        try:
+                            value = float(threshold_match.group(1))
+                        except ValueError:
+                            continue
+                        parsed = MetricThreshold(metric=header, comparator=comparator, value=value)
+                        break
+
+                    if parsed is None:
+                        continue
+
+                    fingerprint = (parsed.metric, parsed.comparator, parsed.value)
+                    if fingerprint in seen:
+                        continue
+                    seen.add(fingerprint)
+                    thresholds.append(parsed)
+                    # One threshold per metric is enough for this prompt parser.
+                    break
+
+                if any(item.metric == header for item in thresholds):
+                    break
+
+        return thresholds
+
+    def _metric_passes_threshold(self, metric_value: float, threshold: MetricThreshold) -> bool:
+        if threshold.comparator == "gt":
+            return metric_value > threshold.value
+        if threshold.comparator == "gte":
+            return metric_value >= threshold.value
+        if threshold.comparator == "lt":
+            return metric_value < threshold.value
+        if threshold.comparator == "lte":
+            return metric_value <= threshold.value
+        # "eq"
+        return metric_value == threshold.value
+
+    def filter_ranked_players_by_prompt_thresholds(
+        self, ranked_players: list[dict[str, object]], prompt: str
+    ) -> list[dict[str, object]]:
+        thresholds = self._extract_metric_thresholds(prompt)
+        if not thresholds:
+            return ranked_players
+
+        filtered: list[dict[str, object]] = []
+        for entry in ranked_players:
+            player_payload = entry.get("player", {})
+            if not isinstance(player_payload, dict):
+                continue
+            numeric_metrics = player_payload.get("numeric_metrics", {})
+            if not isinstance(numeric_metrics, dict):
+                continue
+
+            matches_all = True
+            for threshold in thresholds:
+                raw_metric_value = numeric_metrics.get(threshold.metric)
+                if raw_metric_value is None:
+                    matches_all = False
+                    break
+
+                try:
+                    metric_value = float(raw_metric_value)
+                except (TypeError, ValueError):
+                    matches_all = False
+                    break
+
+                if not self._metric_passes_threshold(metric_value, threshold):
+                    matches_all = False
+                    break
+
+            if matches_all:
+                filtered.append(entry)
+
+        return filtered
 
     def _prefer_low(self, prompt: str) -> bool:
         normalized = _normalize_text(prompt)

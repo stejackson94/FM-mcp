@@ -72,6 +72,11 @@ def api_rank(
             entry for entry in ranked_pool if entry_matches_position_terms(entry, resolved_position)
         ]
 
+    ranked_pool = catalog.filter_ranked_players_by_prompt_thresholds(
+        ranked_players=ranked_pool,
+        prompt=effective_prompt,
+    )
+
     if min_minutes is not None:
         filtered_pool: list[dict[str, Any]] = []
         for entry in ranked_pool:
