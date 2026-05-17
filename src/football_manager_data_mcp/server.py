@@ -3,8 +3,8 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from football_manager_data_mcp.catalog import (
-    FootballCatalog,
     _METRIC_DISPLAY_NAMES,
+    FootballCatalog,
     _convert_player_dict_metrics,
 )
 

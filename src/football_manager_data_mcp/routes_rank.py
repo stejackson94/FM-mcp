@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from football_manager_data_mcp._deps import get_catalog, get_explanation_settings
 from football_manager_data_mcp.catalog import (
-    FootballCatalog,
     _METRIC_DISPLAY_NAMES,
+    FootballCatalog,
     _convert_player_dict_metrics,
 )
 from football_manager_data_mcp.explanations import ExplanationSettings, build_entry_explanation
