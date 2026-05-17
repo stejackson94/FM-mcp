@@ -3,9 +3,9 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from football_manager_data_mcp.catalog import (
-    _convert_player_dict_metrics,
-    _METRIC_DISPLAY_NAMES,
     FootballCatalog,
+    _METRIC_DISPLAY_NAMES,
+    _convert_player_dict_metrics,
 )
 
 catalog = FootballCatalog()
