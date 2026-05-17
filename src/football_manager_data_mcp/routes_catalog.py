@@ -7,7 +7,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from football_manager_data_mcp._deps import get_catalog
-from football_manager_data_mcp.catalog import FootballCatalog, _convert_player_dict_metrics
+from football_manager_data_mcp.catalog import (
+    _convert_player_dict_metrics,
+    FootballCatalog,
+)
 
 router = APIRouter()
 
