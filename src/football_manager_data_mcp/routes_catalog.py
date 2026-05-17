@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from football_manager_data_mcp._deps import get_catalog
-from football_manager_data_mcp.catalog import FootballCatalog
+from football_manager_data_mcp.catalog import FootballCatalog, _convert_player_dict_metrics
 
 router = APIRouter()
 
@@ -36,4 +36,4 @@ def api_player(
     player = catalog.get_player_profile(player_id)
     if player is None:
         raise HTTPException(status_code=404, detail="Player not found.")
-    return player
+    return _convert_player_dict_metrics(player)

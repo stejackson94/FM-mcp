@@ -12,6 +12,28 @@ _COLUMN_ALIASES = {
     "Pres C": "Pres C/90",
 }
 
+_METRIC_DISPLAY_NAMES = {
+    "Shot %": "Shot Percentage",
+    "Crs A/90": "Crosses Attempted Per 90",
+    "Pr passes/90": "Progressive Passes Per 90",
+    "Tck/90": "Tackles Per 90",
+    "Tck R": "Tackle Rate",
+    "Hdrs W/90": "Headers Won Per 90",
+    "Int/90": "Interceptions Per 90",
+    "Poss Won/90": "Possession Won Per 90",
+    "Poss Lost/90": "Possession Lost Per 90",
+    "Pres C/90": "Pressures Completed Per 90",
+    "Pres A/90": "Pressures Attempted Per 90",
+    "K Ps/90": "Key Passes Per 90",
+    "xG/90": "Expected Goals Per 90",
+    "Gls/90": "Goals Per 90",
+    "Shot/90": "Shots Per 90",
+    "Gls": "Goals",
+    "Ast": "Assists",
+    "Mins": "Minutes",
+    "Pas %": "Pass Percentage",
+}
+
 
 def _normalize_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
@@ -76,6 +98,23 @@ def _split_club_name(club_cell: str) -> str:
 
 def _position_capabilities(position_text: str) -> set[str]:
     return text_position_capabilities(position_text)
+
+
+def _convert_metrics_to_display_names(metrics: dict[str, str]) -> dict[str, str]:
+    """Convert metric names from short form to full display names."""
+    return {_METRIC_DISPLAY_NAMES.get(name, name): value for name, value in metrics.items()}
+
+
+def _convert_player_dict_metrics(player_dict: dict[str, object]) -> dict[str, object]:
+    """Convert player dict to use display names for metrics and numeric_metrics."""
+    if "metrics" in player_dict and isinstance(player_dict["metrics"], dict):
+        player_dict["metrics"] = _convert_metrics_to_display_names(player_dict["metrics"])
+    if "numeric_metrics" in player_dict and isinstance(player_dict["numeric_metrics"], dict):
+        numeric_metrics = player_dict["numeric_metrics"]
+        player_dict["numeric_metrics"] = {
+            _METRIC_DISPLAY_NAMES.get(name, name): value for name, value in numeric_metrics.items()
+        }
+    return player_dict
 
 
 def _read_players_table(players_html_path: Path) -> list[dict[str, str]]:
